@@ -1,5 +1,8 @@
 Revision history for Crypt::SMIME
 
+0.08    Wed Sep 26 11:20:58 JST 2007
+        doc fix
+
 0.07    Tue Sep 25 12:39:36 JST 2007
         Renamed from Tripletail::SMIME.
 

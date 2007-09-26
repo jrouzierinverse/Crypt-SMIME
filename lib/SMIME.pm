@@ -2,7 +2,7 @@ package Crypt::SMIME;
 use warnings;
 use strict;
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 require XSLoader;
 XSLoader::load(__PACKAGE__, $VERSION);
@@ -204,8 +204,8 @@ Crypt::SMIME - S/MIME message signing, verification, encryption and decryption
 =head1 DESCRIPTION
 
 This module provides a class for handling S/MIME messages. It can sign, verify,
-encrypt and decrypt messages. It requires libcrypto (L<< http://www.openssl.org
->>) to work.
+encrypt and decrypt messages. It requires libcrypto (L<http://www.openssl.org>)
+to work.
 
 
 =head2 METHODS

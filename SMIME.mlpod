@@ -4,7 +4,7 @@
 =head1 NAME
 
 Crypt::SMIME - S/MIME message signing, verification, encryption and decryption
-J<< ja; Crypt::SMIME - S/MIMEの署名、検証、暗号化、復号化 >>
+J<< ja; Crypt::SMIME::JA - S/MIMEの署名、検証、暗号化、復号化 >>
 
 =head1 SYNOPSIS
 
@@ -28,11 +28,11 @@ J<< ja; Crypt::SMIME - S/MIMEの署名、検証、暗号化、復号化 >>
 =head1 DESCRIPTION
 
 This module provides a class for handling S/MIME messages. It can sign, verify,
-encrypt and decrypt messages. It requires libcrypto (L<< http://www.openssl.org
->>) to work.
+encrypt and decrypt messages. It requires libcrypto (L<http://www.openssl.org>)
+to work.
 J<< ja;
 S/MIMEの署名、検証、暗号化、復号化を行うクラス。
-cryptoライブラリ(http://www.openssl.org)が必要。
+libcrypto (L<http://www.openssl.org>) が必要。
 >>
 
 =head2 METHODS

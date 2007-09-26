@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-Crypt::SMIME - S/MIMEの署名、検証、暗号化、復号化
+Crypt::SMIME::JA - S/MIMEの署名、検証、暗号化、復号化
 
 =head1 概要
 
@@ -26,7 +26,7 @@ Crypt::SMIME - S/MIMEの署名、検証、暗号化、復号化
 =head1 説明
 
 S/MIMEの署名、検証、暗号化、復号化を行うクラス。
-cryptoライブラリ(http://www.openssl.org)が必要。
+libcrypto (L<http://www.openssl.org>) が必要。
 
 =head2 メソッド
 
