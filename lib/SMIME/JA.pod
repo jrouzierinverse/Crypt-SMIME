@@ -146,6 +146,8 @@ This library is free software; you can redistribute it and/or modify it under th
 Bug reports and comments to: tl@tripletail.jp
 
 
-Web site: http://tripletail.jp/
-
+=for comment
+Local Variables:
+mode: cperl
+End:
 

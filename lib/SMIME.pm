@@ -2,7 +2,7 @@ package Crypt::SMIME;
 use warnings;
 use strict;
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 require XSLoader;
 XSLoader::load(__PACKAGE__, $VERSION);
@@ -349,6 +349,8 @@ This library is free software; you can redistribute it and/or modify it under th
 Bug reports and comments to: tl@tripletail.jp
 
 
-Web site: http://tripletail.jp/
-
+=for comment
+Local Variables:
+mode: cperl
+End:
 

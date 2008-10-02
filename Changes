@@ -1,5 +1,10 @@
 Revision history for Crypt::SMIME
 
+0.09    Thu Oct  2 15:00:03 JST 2008
+        fix INSTALLMANxDIR problem.
+        fix: SSLEAY_RAND_BYTES:PRNG not seeded.
+             http://rt.cpan.org/Public/Bug/Display.html?id=35839
+
 0.08    Wed Sep 26 11:20:58 JST 2007
         doc fix
 
