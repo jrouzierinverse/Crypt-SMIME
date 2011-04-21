@@ -1,5 +1,10 @@
 Revision history for Crypt::SMIME
 
+0.10    Thu Apr 21 14:15:46 JST 2011
+        fix: setPublicKey() should allow a single PEM string to
+             contain many X.509 certificates.
+             http://rt.cpan.org/Public/Bug/Display.html?id=67612
+
 0.09    Thu Oct  2 15:00:03 JST 2008
         fix INSTALLMANxDIR problem.
         fix: SSLEAY_RAND_BYTES:PRNG not seeded.

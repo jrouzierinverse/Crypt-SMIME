@@ -1,3 +1,4 @@
+# -*- perl -*-
 use Test::More tests => 23;
 use Test::Exception;
 use File::Spec;

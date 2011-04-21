@@ -1,6 +1,8 @@
 ~$
 \.tar\.gz$
 (^|/)\.svn(/|$)
+^\.hg(/|$)
+^\.hgignore$
 ^blib(/|$)
 ^Makefile$
 ^Makefile\.old$

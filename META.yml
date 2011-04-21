@@ -1,13 +1,24 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         Crypt-SMIME
-version:      0.09
-version_from: SMIME.pl
-installdirs:  site
+--- #YAML:1.0
+name:               Crypt-SMIME
+version:            0.10
+abstract:           S/MIME message signing, verification, encryption and decryption
+author:
+    - Ymirlink <tl@tripletail.jp>
+license:            unknown
+distribution_type:  module
+configure_requires:
+    ExtUtils::MakeMaker:  0
+build_requires:
+    ExtUtils::MakeMaker:  0
 requires:
-    Test::Exception:               0
-    Test::More:                    0
-    XSLoader:                      0
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.17
+    Test::Exception:  0
+    Test::More:       0
+    XSLoader:         0
+no_index:
+    directory:
+        - t
+        - inc
+generated_by:       ExtUtils::MakeMaker version 6.56
+meta-spec:
+    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
+    version:  1.4

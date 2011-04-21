@@ -495,28 +495,49 @@ setPublicKey(Crypt_SMIME this, SV* crt)
 void
 _addPublicKey(Crypt_SMIME this, char* crt)
     PREINIT:
-        X509* pub_cert;
+        BIO* buf;
 
     CODE:
-        pub_cert = load_cert(crt);
-	if (pub_cert == NULL) {
-	    OPENSSL_CROAK("Crypt::SMIME#setPublicKey: failed to load the public cert");
-	}
-
-	if (X509_STORE_add_cert(this->pubkeys_store, pub_cert) == 0) {
-	    X509_free(pub_cert);
-	    OPENSSL_CROAK("Crypt::SMIME#setPublicKey: failed to store the public cert");
+        /* Be aware; 'crt' may contain two or more certificates.
+        */
+        buf = BIO_new_mem_buf(crt, -1);
+        if (buf == NULL) {
+            OPENSSL_CROAK("Crypt::SMIME#setPublicKey: failed to allocate a buffer");
         }
 
-	pub_cert = X509_dup(pub_cert);
-	if (pub_cert == NULL) {
-	    OPENSSL_CROAK("Crypt::SMIME#setPublicKey: failed to duplicate the X509 structure");
-	}
+        while (1) {
+            X509* pub_cert;
 
-	if (sk_X509_push(this->pubkeys_stack, pub_cert) == 0) {
-	    X509_free(pub_cert);
-	    OPENSSL_CROAK("Crypt::SMIME#setPublicKey: failed to push the public cert onto the stack");
-	}
+            pub_cert = PEM_read_bio_X509_AUX(buf, NULL, NULL, NULL);
+            if (pub_cert == NULL) {
+                if (ERR_GET_REASON(ERR_get_error()) == PEM_R_NO_START_LINE) {
+                    break;
+                }
+                else {
+                    BIO_free(buf);
+                    OPENSSL_CROAK("Crypt::SMIME#setPublicKey: failed to load the public cert");
+                }
+            }
+
+            if (X509_STORE_add_cert(this->pubkeys_store, pub_cert) == 0) {
+                X509_free(pub_cert);
+                BIO_free(buf);
+                OPENSSL_CROAK("Crypt::SMIME#setPublicKey: failed to store the public cert");
+            }
+
+            pub_cert = X509_dup(pub_cert);
+            if (pub_cert == NULL) {
+                BIO_free(buf);
+                OPENSSL_CROAK("Crypt::SMIME#setPublicKey: failed to duplicate the X509 structure");
+            }
+
+            if (sk_X509_push(this->pubkeys_stack, pub_cert) == 0) {
+                X509_free(pub_cert);
+                BIO_free(buf);
+                OPENSSL_CROAK("Crypt::SMIME#setPublicKey: failed to push the public cert onto the stack");
+            }
+        }
+        BIO_free(buf);
 
 SV*
 _sign(Crypt_SMIME this, char* raw)
