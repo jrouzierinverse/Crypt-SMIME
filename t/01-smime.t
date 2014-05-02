@@ -1,24 +1,24 @@
 # -*- perl -*-
-use Test::More tests => 23;
-use Test::Exception;
-use File::Spec;
 use strict;
 use warnings;
+use ExtUtils::PkgConfig ();
+use File::Spec;
+use File::Temp qw(tempfile);
+use Test::More tests => 24;
+use Test::Exception;
 
-BEGIN {
-    use Crypt::SMIME;
-    my $openssl = '/usr/local/ymir/perl/openssl/bin/openssl';
-    if (!-x $openssl) {
-        $openssl = '/usr/bin/openssl';
+my (%key, %csr, %crt);
+do {
+    my $OPENSSL = ExtUtils::PkgConfig->variable('openssl', 'prefix') . '/bin/openssl';
+    if (-x $OPENSSL) {
+        diag "Using `$OPENSSL' to generate a keypair";
     }
-    if(!-x $openssl && -e 'c:/openssl/bin/openssl.exe' )
-    {
-        $openssl = 'c:/openssl/bin/openssl.exe';
+    else {
+        BAIL_OUT(q{Executable `openssl' was not found});
     }
 
-    my $devnull = File::Spec->devnull();
-    open(FILE, "> tmp-$$.config") or die $!;
-    print FILE<<'CONFIG';
+    my ($conf_fh, $conf_file) = tempfile(UNLINK => 1);
+    print {$conf_fh} <<'EOF';
 [ req ]
 distinguished_name     = req_distinguished_name
 attributes             = req_attributes
@@ -32,36 +32,35 @@ OU                     = Organizational Unit Name
 CN                     = Common Name
 emailAddress           = test@email.address
 [ req_attributes ]
-CONFIG
-    close(FILE);
-    foreach my $i (1 .. 2) {
-	system(qq{$openssl genrsa > tmp-$$-$i.key 2>$devnull}) and die $!;
-        system(qq{$openssl req -new -key tmp-$$-$i.key -out tmp-$$-$i.csr -config tmp-$$.config >$devnull}) and die $!;
-	system(qq{$openssl x509 -in tmp-$$-$i.csr -out tmp-$$-$i.crt -req -signkey tmp-$$-$i.key -set_serial $i 2>$devnull >$devnull}) and die $!;
-    }
-}
+EOF
+    close $conf_fh;
 
-END {
+    my $DEVNULL = File::Spec->devnull();
     foreach my $i (1 .. 2) {
-	unlink "tmp-$$-$i.key", "tmp-$$-$i.csr", "tmp-$$-$i.crt";
+        (undef, $key{$i}) = tempfile(UNLINK => 1);
+        (undef, $csr{$i}) = tempfile(UNLINK => 1);
+        (undef, $crt{$i}) = tempfile(UNLINK => 1);
+
+        system(qq{$OPENSSL genrsa -out $key{$i} >$DEVNULL 2>&1}) and die $!;
+        system(qq{$OPENSSL req -new -key $key{$i} -out $csr{$i} -config $conf_file >$DEVNULL 2>&1}) and die $!;
+        system(qq{$OPENSSL x509 -in $csr{$i} -out $crt{$i} -req -signkey $key{$i} -set_serial $i >$DEVNULL 2>&1}) and die $!;
     }
-    unlink("tmp-$$.config");
-}
+};
 
 sub key {
     my $i = shift;
 
-    local $/ = undef;
-    open my $fh, '<', "tmp-$$-$i.key";
-    <$fh>;
+    local $/;
+    open my $fh, '<', $key{$i} or die $!;
+    return scalar <$fh>;
 }
 
 sub crt {
     my $i = shift;
 
-    local $/ = undef;
-    open my $fh, '<', "tmp-$$-$i.crt";
-    <$fh>;
+    local $/;
+    open my $fh, '<', $crt{$i} or die $!;
+    return scalar <$fh>;
 }
 
 my $plain = q{From: alice@example.org
@@ -78,6 +77,10 @@ This is a test mail. Please ignore...
 $verify =~ s/\r?\n|\r/\r\n/g;
 
 #-----------------------
+
+BEGIN {
+    use_ok('Crypt::SMIME');
+}
 
 my $smime;
 ok($smime = Crypt::SMIME->new, 'new');

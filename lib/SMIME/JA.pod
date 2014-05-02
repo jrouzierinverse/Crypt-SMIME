@@ -69,6 +69,9 @@ multipartのトップレベルに移される。
 C<Subject> はS/MIMEを認識できないメーラのために, multipartの
 トップレベルと保護されるメッセージの両側に配置される。
 
+元の MIME メッセージ、秘密鍵、またはその証明書のいずれかが汚染されている
+(tainted) ならば、署名されたメッセージも汚染される。
+
 =item signonly()
 
   $sign = $smime->signonly($prepared_mime);
@@ -76,6 +79,9 @@ C<Subject> はS/MIMEを認識できないメーラのために, multipartの
 署名の計算を行う。
 C<$sign> はBASE64でエンコードされて返る。
 C<$prepared_mime> には, L</prepareSmimeMessage> で返される値を渡す。
+
+元の MIME メッセージ、秘密鍵、またはその証明書のいずれかが汚染されている
+(tainted) ならば、生成された署名も汚染される。
 
 =item prepareSmimeMessage()
 
@@ -99,6 +105,9 @@ C<Subject> ヘッダのみは C<$prepared_mime> と C<$outer_header> の両方�
 
 検証を行う。検証に失敗した場合はその理由と共にdieする。
 
+元の S/MIME メッセージ、または公開鍵の少なくとも一つが汚染されている
+(tainted) ならば、検証されたメッセージも汚染される。
+
 =item encrypt()
 
   $encrypted_mime = $smime->encrypt($raw_mime);
@@ -110,11 +119,17 @@ multipartのトップレベルにコピーされる。
 C<Subject> はS/MIMEを認識できないメーラのために, multipartの
 トップレベルと保護されるメッセージの両側に配置される。
 
+元の MIME メッセージ、または公開鍵の少なくとも一つが汚染されている
+(tainted) ならば、暗号化されたメッセージも汚染される。
+
 =item decrypt()
 
   $decrypted_mime = $smime->decrypt($encrypted_mime);
 
-復号化を行う。復号化に失敗した場合はその理由と共にdieする。
+復号を行う。復号に失敗した場合はその理由と共にdieする。
+
+元の S/MIME メッセージ、秘密鍵、またはその証明書のいずれかが汚染されている
+(tainted) ならば、復号されたメッセージも汚染される。
 
 =item isSigned()
 

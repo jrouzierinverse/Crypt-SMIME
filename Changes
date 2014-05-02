@@ -1,5 +1,21 @@
 Revision history for Crypt::SMIME
 
+0.11    Wed Apr 30 19:09:28 JST 2014
+        - setPublicKey() was erroneously raising an error if taint
+          checking was enabled:
+          https://rt.cpan.org/Ticket/Display.html?id=95163
+        - sign(), signonly(), check(), encrypt(), decrypt() now
+          returns a tainted message if the input or a key is
+          tainted. See the documentation for details.
+        - Load the standard OpenSSL configuration file when available:
+          https://rt.cpan.org/Public/Bug/Display.html?id=87675
+        - `make clean' should not remove SMIME.pod:
+          https://rt.cpan.org/Public/Bug/Display.html?id=56025
+        - isSigned() and isEncrypted() were failing to recognize a
+          signed / encrypted message if its Content-Type has an
+          unquoted smime-type:
+          https://rt.cpan.org/Public/Bug/Display.html?id=53620
+
 0.10    Thu Apr 21 14:15:46 JST 2011
         fix: setPublicKey() should allow a single PEM string to
              contain many X.509 certificates.

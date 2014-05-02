@@ -2,7 +2,7 @@ package Crypt::SMIME;
 use warnings;
 use strict;
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 require XSLoader;
 XSLoader::load(__PACKAGE__, $VERSION);
@@ -64,10 +64,10 @@ sub isSigned {
 	}
 
 	my $ctype = $this->_getContentType($mime);
-	if($ctype =~ m!^application/(?:x-)?pkcs7-mime! && $ctype =~ m!smime-type=signed-data!) {
+	if($ctype =~ m!^application/(?:x-)?pkcs7-mime! && $ctype =~ m!smime-type="?signed-data"?!) {
 		# signed-data署名
 		1;
-	} elsif($ctype =~ m!^multipart/signed! && $ctype =~ m!protocol="application/(?:x-)?pkcs7-signature"!) {
+	} elsif($ctype =~ m!^multipart/signed! && $ctype =~ m!protocol="?application/(?:x-)?pkcs7-signature"?!) {
 		# 分離署名 (クリア署名)
 		1;
 	} else {
@@ -87,7 +87,7 @@ sub isEncrypted {
 
 	my $ctype = $this->_getContentType($mime);
 	if($ctype =~ m!^application/(?:x-)?pkcs7-mime!
-	&& ($ctype !~ m!smime-type=! || $ctype =~ m!smime-type=enveloped-data!)) {
+	&& ($ctype !~ m!smime-type=! || $ctype =~ m!smime-type="?enveloped-data"?!)) {
 		# smime-typeが存在しないか、それがenveloped-dataである。
 		1;
 	} else {

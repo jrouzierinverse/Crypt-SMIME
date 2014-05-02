@@ -28,8 +28,7 @@ J<< ja; Crypt::SMIME::JA - S/MIMEの署名、検証、暗号化、復号化 >>
 =head1 DESCRIPTION
 
 This module provides a class for handling S/MIME messages. It can sign, verify,
-encrypt and decrypt messages. It requires libcrypto (L<http://www.openssl.org>)
-to work.
+encrypt and decrypt messages. It requires libcrypto (L<http://www.openssl.org>).
 J<< ja;
 S/MIMEの署名、検証、暗号化、復号化を行うクラス。
 libcrypto (L<http://www.openssl.org>) が必要。
@@ -106,6 +105,13 @@ C<Subject> はS/MIMEを認識できないメーラのために, multipartの
 トップレベルと保護されるメッセージの両側に配置される。
 >>
 
+The resulting message will be tainted if any of the original MIME
+message, the private key or its certificate is tainted.
+J<< ja;
+元の MIME メッセージ、秘密鍵、またはその証明書のいずれかが汚染されている
+(tainted) ならば、署名されたメッセージも汚染される。
+>>
+
 =item signonly()
 
   $sign = $smime->signonly($prepared_mime);
@@ -118,6 +124,13 @@ J<< ja;
 署名の計算を行う。
 C<$sign> はBASE64でエンコードされて返る。
 C<$prepared_mime> には, L</prepareSmimeMessage> で返される値を渡す。
+>>
+
+The resulting signature will be tainted if any of the original MIME
+message, the private key or its certificate is tainted.
+J<< ja;
+元の MIME メッセージ、秘密鍵、またはその証明書のいずれかが汚染されている
+(tainted) ならば、生成された署名も汚染される。
 >>
 
 =item prepareSmimeMessage()
@@ -159,6 +172,13 @@ J<< ja;
 検証を行う。検証に失敗した場合はその理由と共にdieする。
 >>
 
+The resulting message will be tainted if the original S/MIME message
+or at least one public key is tainted.
+J<< ja;
+元の S/MIME メッセージ、または公開鍵の少なくとも一つが汚染されている
+(tainted) ならば、検証されたメッセージも汚染される。
+>>
+
 =item encrypt()
 
   $encrypted_mime = $smime->encrypt($raw_mime);
@@ -179,6 +199,13 @@ C<Subject> はS/MIMEを認識できないメーラのために, multipartの
 トップレベルと保護されるメッセージの両側に配置される。
 >>
 
+The resulting message will be tainted if the original MIME message or
+at least one public key is tainted.
+J<< ja;
+元の MIME メッセージ、または公開鍵の少なくとも一つが汚染されている
+(tainted) ならば、暗号化されたメッセージも汚染される。
+>>
+
 =item decrypt()
 
   $decrypted_mime = $smime->decrypt($encrypted_mime);
@@ -186,7 +213,14 @@ C<Subject> はS/MIMEを認識できないメーラのために, multipartの
 Decrypt an S/MIME and return a MIME message. This method dies if it fails to
 decrypt it.
 J<< ja;
-復号化を行う。復号化に失敗した場合はその理由と共にdieする。
+復号を行う。復号に失敗した場合はその理由と共にdieする。
+>>
+
+The resulting message will be tainted if any of the original S/MIME
+message, the private key or its certificate is tainted.
+J<< ja;
+元の S/MIME メッセージ、秘密鍵、またはその証明書のいずれかが汚染されている
+(tainted) ならば、復号されたメッセージも汚染される。
 >>
 
 =item isSigned()

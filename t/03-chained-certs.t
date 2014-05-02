@@ -1,7 +1,11 @@
 # -*- perl -*-
+use strict;
+use warnings;
+use ExtUtils::PkgConfig ();
+use File::Spec;
+use File::Temp qw(tempfile);
 use Test::More tests => 8;
 use Test::Exception;
-use File::Spec;
 
 # Create the following certificate tree:
 #
@@ -21,24 +25,22 @@ use File::Spec;
 #  2. Verify the mail with only the root CA certificate and its
 #     key. Can we prove the mail is actually trustable?
 
-my $DEVNULL = File::Spec->devnull();
-my $OPENSSL = do {
-    my $tmp = `which openssl 2>$DEVNULL`;
-    if ($? == 0) {
-        chomp $tmp;
-        $tmp;
+my (%key, %csr, %crt);
+do {
+    my $DEVNULL = File::Spec->devnull();
+
+    my $OPENSSL = ExtUtils::PkgConfig->variable('openssl', 'prefix') . '/bin/openssl';
+    if (-x $OPENSSL) {
+        diag "Using `$OPENSSL' to generate keypairs";
     }
     else {
-        BAIL_OUT("No openssl(1) were found in the PATH.");
+        BAIL_OUT(q{Executable `openssl' was not found});
     }
-};
-diag "Using `$OPENSSL'...\n";
 
-# Create the root CA.
-do {
+    # Create the root CA.
     do {
-        open my $fh, '>', "root.$$.cfg" or die $!;
-        print {$fh} <<'EOF';
+        my ($conf_fh, $conf_file) = tempfile(UNLINK => 1);
+        print {$conf_fh} << 'EOF';
 [ req ]
 distinguished_name     = req_distinguished_name
 attributes             = req_attributes
@@ -55,18 +57,20 @@ CN                     = ROOT
 [ v3_ca ]
 basicConstraints       = CA:true
 EOF
-        close $fh;
-    };
-    system(qq{$OPENSSL genrsa > root.$$.key 2>$DEVNULL}) and die $!;
-    system(qq{$OPENSSL req -new -key root.$$.key -out root.$$.csr -config root.$$.cfg 2>&1 >$DEVNULL}) and die $!;
-    system(qq{$OPENSSL x509 -in root.$$.csr -out root.$$.crt -req -signkey root.$$.key -set_serial 1 -extfile root.$$.cfg -extensions v3_ca 2>&1 >$DEVNULL}) and die;
-};
+        close $conf_fh;
 
-# Create an intermediate CA #1.
-do {
+        (undef, $key{root}) = tempfile(UNLINK => 1);
+        (undef, $csr{root}) = tempfile(UNLINK => 1);
+        (undef, $crt{root}) = tempfile(UNLINK => 1);
+        system(qq{$OPENSSL genrsa -out $key{root} >$DEVNULL 2>&1}) and die $!;
+        system(qq{$OPENSSL req -new -key $key{root} -out $csr{root} -config $conf_file >$DEVNULL 2>&1}) and die $!;
+        system(qq{$OPENSSL x509 -in $csr{root} -out $crt{root} -req -signkey $key{root} -set_serial 1 -extfile $conf_file -extensions v3_ca >$DEVNULL 2>&1}) and die;
+    };
+
+    # Create an intermediate CA #1.
     do {
-        open my $fh, '>', "intermed-1.$$.cfg" or die $!;
-        print {$fh} <<'EOF';
+        my ($conf_fh, $conf_file) = tempfile(UNLINK => 1);
+        print {$conf_fh} << 'EOF';
 [ req ]
 distinguished_name     = req_distinguished_name
 attributes             = req_attributes
@@ -83,18 +87,20 @@ CN                     = INTERMED-1
 [ v3_ca ]
 basicConstraints       = CA:true
 EOF
-        close $fh;
-    };
-    system(qq{$OPENSSL genrsa > intermed-1.$$.key 2>$DEVNULL}) and die $!;
-    system(qq{$OPENSSL req -new -key intermed-1.$$.key -out intermed-1.$$.csr -config intermed-1.$$.cfg 2>&1 >$DEVNULL}) and die $!;
-    system(qq{$OPENSSL x509 -in intermed-1.$$.csr -out intermed-1.$$.crt -req -CA root.$$.crt -CAkey root.$$.key -set_serial 1 -extfile root.$$.cfg -extensions v3_ca 2>&1 >$DEVNULL}) and die;
-};
+        close $conf_fh;
 
-# Create an intermediate CA #2.
-do {
+        (undef, $key{intermed_1}) = tempfile(UNLINK => 1);
+        (undef, $csr{intermed_1}) = tempfile(UNLINK => 1);
+        (undef, $crt{intermed_1}) = tempfile(UNLINK => 1);
+        system(qq{$OPENSSL genrsa -out $key{intermed_1} >$DEVNULL 2>&1}) and die $!;
+        system(qq{$OPENSSL req -new -key $key{intermed_1} -out $csr{intermed_1} -config $conf_file >$DEVNULL 2>&1}) and die $!;
+        system(qq{$OPENSSL x509 -in $csr{intermed_1} -out $crt{intermed_1} -req -CA $crt{root} -CAkey $key{root} -set_serial 1 -extfile $conf_file -extensions v3_ca >$DEVNULL 2>&1}) and die;
+    };
+
+    # Create an intermediate CA #2.
     do {
-        open my $fh, '>', "intermed-2.$$.cfg" or die $!;
-        print {$fh} <<'EOF';
+        my ($conf_fh, $conf_file) = tempfile(UNLINK => 1);
+        print {$conf_fh} << 'EOF';
 [ req ]
 distinguished_name     = req_distinguished_name
 attributes             = req_attributes
@@ -111,18 +117,20 @@ CN                     = INTERMED-2
 [ v3_ca ]
 basicConstraints       = CA:true
 EOF
-        close $fh;
-    };
-    system(qq{$OPENSSL genrsa > intermed-2.$$.key 2>$DEVNULL}) and die $!;
-    system(qq{$OPENSSL req -new -key intermed-2.$$.key -out intermed-2.$$.csr -config intermed-2.$$.cfg 2>&1 >$DEVNULL}) and die $!;
-    system(qq{$OPENSSL x509 -in intermed-2.$$.csr -out intermed-2.$$.crt -req -CA intermed-1.$$.crt -CAkey intermed-1.$$.key -set_serial 1 -extfile root.$$.cfg -extensions v3_ca 2>&1 >$DEVNULL}) and die;
-};
+        close $conf_fh;
 
-# Create an user.
-do {
+        (undef, $key{intermed_2}) = tempfile(UNLINK => 1);
+        (undef, $csr{intermed_2}) = tempfile(UNLINK => 1);
+        (undef, $crt{intermed_2}) = tempfile(UNLINK => 1);
+        system(qq{$OPENSSL genrsa -out $key{intermed_2} >$DEVNULL 2>&1}) and die $!;
+        system(qq{$OPENSSL req -new -key $key{intermed_2} -out $csr{intermed_2} -config $conf_file >$DEVNULL 2>&1}) and die $!;
+        system(qq{$OPENSSL x509 -in $csr{intermed_2} -out $crt{intermed_2} -req -CA $crt{intermed_1} -CAkey $key{intermed_1} -set_serial 1 -extfile $conf_file -extensions v3_ca >$DEVNULL 2>&1}) and die;
+    };
+
+    # Create an user.
     do {
-        open my $fh, '>', "user.$$.cfg" or die $!;
-        print {$fh} <<'EOF';
+        my ($conf_fh, $conf_file) = tempfile(UNLINK => 1);
+        print {$conf_fh} << 'EOF';
 [ req ]
 distinguished_name     = req_distinguished_name
 attributes             = req_attributes
@@ -136,31 +144,30 @@ OU                     = An user
 CN                     = USER
 [ req_attributes ]
 EOF
-        close $fh;
-    };
-    system(qq{$OPENSSL genrsa > user.$$.key 2>$DEVNULL}) and die $!;
-    system(qq{$OPENSSL req -new -key user.$$.key -out user.$$.csr -config user.$$.cfg 2>&1 >$DEVNULL}) and die $!;
-    system(qq{$OPENSSL x509 -in user.$$.csr -out user.$$.crt -req -CA intermed-2.$$.crt -CAkey intermed-2.$$.key -set_serial 1 2>&1 >$DEVNULL}) and die;
-};
+        close $conf_fh;
 
-# Delete temporary files later.
-END {
-    foreach my $who (qw(root intermed-1 intermed-2 user)) {
-        unlink "$who.$$.key", "$who.$$.cfg", "$who.$$.csr", "$who.$$.crt";
-    }
-}
+        (undef, $key{user}) = tempfile(UNLINK => 1);
+        (undef, $csr{user}) = tempfile(UNLINK => 1);
+        (undef, $crt{user}) = tempfile(UNLINK => 1);
+        system(qq{$OPENSSL genrsa -out $key{user} >$DEVNULL 2>&1}) and die $!;
+        system(qq{$OPENSSL req -new -key $key{user} -out $csr{user} -config $conf_file >$DEVNULL 2>&1}) and die $!;
+        system(qq{$OPENSSL x509 -in $csr{user} -out $crt{user} -req -CA $crt{intermed_2} -CAkey $key{intermed_2} -set_serial 1 >$DEVNULL 2>&1}) and die;
+    };
+};
 
 sub key {
     my $who = shift;
+
     local $/;
-    open my $fh, '<', "$who.$$.key" or die $!;
+    open my $fh, '<', $key{$who} or die $!;
     return scalar <$fh>;
 };
 
 sub crt {
     my $who = shift;
+
     local $/;
-    open my $fh, '<', "$who.$$.crt" or die $!;
+    open my $fh, '<', $crt{$who} or die $!;
     return scalar <$fh>;
 }
 
@@ -187,7 +194,7 @@ my $signed = do {
     my $SMIME;
     lives_ok { $SMIME = Crypt::SMIME->new } 'new';
     lives_ok { $SMIME->setPrivateKey(key('user'), crt('user')) } 'setPrivateKey(USER)';
-    lives_ok { $SMIME->setPublicKey(crt('intermed-1')."\n".crt('intermed-2')) } 'setPublicKey(INTERMED-1 & INTERMED-2)';
+    lives_ok { $SMIME->setPublicKey(crt('intermed_1')."\n".crt('intermed_2')) } 'setPublicKey(INTERMED-1 & INTERMED-2)';
     my $tmp;
     lives_ok { $tmp = $SMIME->sign($plain) } 'sign($plain)';
     $tmp;

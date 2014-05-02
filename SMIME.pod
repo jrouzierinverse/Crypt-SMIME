@@ -27,8 +27,7 @@ Crypt::SMIME - S/MIME message signing, verification, encryption and decryption
 =head1 DESCRIPTION
 
 This module provides a class for handling S/MIME messages. It can sign, verify,
-encrypt and decrypt messages. It requires libcrypto (L<http://www.openssl.org>)
-to work.
+encrypt and decrypt messages. It requires libcrypto (L<http://www.openssl.org>).
 
 
 =head2 METHODS
@@ -83,6 +82,10 @@ plain text part and the top-level for mail clients which can't properly handle
 S/MIME messages.
 
 
+The resulting message will be tainted if any of the original MIME
+message, the private key or its certificate is tainted.
+
+
 =item signonly()
 
   $sign = $smime->signonly($prepared_mime);
@@ -91,6 +94,10 @@ Generate a signature from a MIME message. The resulting signature is encoded in
 Base64. The MIME message to be passed to this method should be preprocessed
 beforehand by the prepareSmimeMessage() method. You would rarely need to call
 this method directly.
+
+
+The resulting signature will be tainted if any of the original MIME
+message, the private key or its certificate is tainted.
 
 
 =item prepareSmimeMessage()
@@ -119,6 +126,10 @@ Verify a signature of S/MIME message and return a MIME message. The method dies
 if it fails to verify it.
 
 
+The resulting message will be tainted if the original S/MIME message
+or at least one public key is tainted.
+
+
 =item encrypt()
 
   $encrypted_mime = $smime->encrypt($raw_mime);
@@ -132,12 +143,20 @@ plain text part and the top-level for mail clients which can't properly handle
 S/MIME messages.
 
 
+The resulting message will be tainted if the original MIME message or
+at least one public key is tainted.
+
+
 =item decrypt()
 
   $decrypted_mime = $smime->decrypt($encrypted_mime);
 
 Decrypt an S/MIME and return a MIME message. This method dies if it fails to
 decrypt it.
+
+
+The resulting message will be tainted if any of the original S/MIME
+message, the private key or its certificate is tainted.
 
 
 =item isSigned()

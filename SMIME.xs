@@ -12,8 +12,9 @@
 
 struct crypt_smime {
     EVP_PKEY *priv_key;
-    X509* priv_cert;
-
+    X509*     priv_cert;
+    bool      priv_key_is_tainted;
+    bool      priv_cert_is_tainted;
     const EVP_CIPHER* cipher;
 
     /* 暗号化, 添付用 */
@@ -21,13 +22,23 @@ struct crypt_smime {
 
     /* 検証用 */
     X509_STORE* pubkeys_store;
+
+    bool pubkeys_are_tainted;
 };
 typedef struct crypt_smime * Crypt_SMIME;
 
-#define OPENSSL_CROAK(description) 				\
-    croak("%s: %s",						\
-	  description,						\
-	  ERR_error_string(ERR_get_error(), NULL))
+#define OPENSSL_CROAK(description)                              \
+    croak("%s: %s",                                             \
+          description,                                          \
+          ERR_error_string(ERR_get_error(), NULL))
+
+static inline bool is_string(SV const* sv) {
+    /* It's not sufficient to call SvPOK() to see if an SV contains a
+     * character string. It returns false for all SV if taint checking
+     * is enabled.
+     */
+    return SvPOK(sv) || SvPOKp(sv);
+}
 
 /* B64_write_PKCS7 is copyed from openssl/crypto/pkcs7/pk7_mime.c */
 static int B64_write_PKCS7(BIO *bio, PKCS7 *p7)
@@ -56,7 +67,7 @@ static EVP_PKEY* load_privkey(Crypt_SMIME this, char* pem, char* password) {
     }
 
     key = PEM_read_bio_PrivateKey(
-	buf, NULL, (pem_password_cb*)NULL, password);
+        buf, NULL, (pem_password_cb*)NULL, password);
     BIO_free(buf);
 
     return key;
@@ -73,7 +84,7 @@ static X509* load_cert(char* crt) {
 
     buf = BIO_new_mem_buf(crt, -1);
     if (buf == NULL) {
-	return NULL;
+        return NULL;
     }
 
     x = PEM_read_bio_X509_AUX(buf, NULL, NULL, NULL);
@@ -82,7 +93,7 @@ static X509* load_cert(char* crt) {
     return x;
 }
 
-static SV* sign(Crypt_SMIME this, char* raw) {
+static SV* sign(Crypt_SMIME this, char* plaintext) {
     BIO* inbuf;
     BIO* outbuf;
     PKCS7* pkcs7;
@@ -91,22 +102,22 @@ static SV* sign(Crypt_SMIME this, char* raw) {
     SV* result;
     int err;
 
-    inbuf = BIO_new_mem_buf(raw, -1);
+    inbuf = BIO_new_mem_buf(plaintext, -1);
     if (inbuf == NULL) {
-	return NULL;
+        return NULL;
     }
 
     /*クリア署名を作る */
     pkcs7 = PKCS7_sign(this->priv_cert, this->priv_key, NULL, inbuf, flags);
-    
+
     if (pkcs7 == NULL) {
-	return NULL;
+        return NULL;
     }
 
     outbuf = BIO_new(BIO_s_mem());
     if (outbuf == NULL) {
-	PKCS7_free(pkcs7);
-	return NULL;
+        PKCS7_free(pkcs7);
+        return NULL;
     }
 
     (void)BIO_reset(inbuf);
@@ -120,23 +131,27 @@ static SV* sign(Crypt_SMIME this, char* raw) {
         PKCS7_add_certificate(pkcs7, x509);
       }
     }
-    
+
     err = SMIME_write_PKCS7(outbuf, pkcs7, inbuf, flags);
     PKCS7_free(pkcs7);
     BIO_free(inbuf);
 
     if (err != 1) {
-	return NULL;
+        return NULL;
     }
 
     BIO_get_mem_ptr(outbuf, &bufmem);
     result = newSVpv(bufmem->data, bufmem->length);
     BIO_free(outbuf);
 
+    if (this->priv_key_is_tainted || this->priv_cert_is_tainted || this->pubkeys_are_tainted) {
+        SvTAINTED_on(result);
+    }
+
     return result;
 }
 
-static SV* signonly(Crypt_SMIME this, char* raw) {
+static SV* signonly(Crypt_SMIME this, char* plaintext) {
     BIO* inbuf;
     BIO* outbuf;
     PKCS7* pkcs7;
@@ -145,24 +160,24 @@ static SV* signonly(Crypt_SMIME this, char* raw) {
     SV* result;
     int err;
 
-    inbuf = BIO_new_mem_buf(raw, -1);
+    inbuf = BIO_new_mem_buf(plaintext, -1);
     if (inbuf == NULL) {
-	return NULL;
+        return NULL;
     }
 
     /*クリア署名を作る */
     pkcs7 = PKCS7_sign(this->priv_cert, this->priv_key, NULL, inbuf, flags);
-    
+
     BIO_free(inbuf);
-    
+
     if (pkcs7 == NULL) {
-	return NULL;
+        return NULL;
     }
 
     outbuf = BIO_new(BIO_s_mem());
     if (outbuf == NULL) {
-	PKCS7_free(pkcs7);
-	return NULL;
+        PKCS7_free(pkcs7);
+        return NULL;
     }
 
     {
@@ -174,17 +189,21 @@ static SV* signonly(Crypt_SMIME this, char* raw) {
         PKCS7_add_certificate(pkcs7, x509);
       }
     }
-    
+
     err = B64_write_PKCS7(outbuf, pkcs7);
     PKCS7_free(pkcs7);
 
     if (err != 1) {
-	return NULL;
+        return NULL;
     }
 
     BIO_get_mem_ptr(outbuf, &bufmem);
     result = newSVpv(bufmem->data, bufmem->length);
     BIO_free(outbuf);
+
+    if (this->priv_key_is_tainted || this->priv_cert_is_tainted || this->pubkeys_are_tainted) {
+        SvTAINTED_on(result);
+    }
 
     return result;
 }
@@ -201,42 +220,46 @@ static SV* check(Crypt_SMIME this, char* signed_mime) {
 
     inbuf = BIO_new_mem_buf(signed_mime, -1);
     if (inbuf == NULL) {
-	return NULL;
+        return NULL;
     }
 
     sign = SMIME_read_PKCS7(inbuf, &detached);
     BIO_free(inbuf);
-    
+
     if (sign == NULL) {
-	return NULL;
+        return NULL;
     }
 
     outbuf = BIO_new(BIO_s_mem());
     if (outbuf == NULL) {
-	PKCS7_free(sign);
-	return NULL;
+        PKCS7_free(sign);
+        return NULL;
     }
 
     err = PKCS7_verify(sign, NULL, this->pubkeys_store, detached, outbuf, flags);
     PKCS7_free(sign);
-    
+
     if (detached != NULL) {
-	BIO_free(detached);
+        BIO_free(detached);
     }
 
     if (err <= 0) {
-	BIO_free(outbuf);
-	return NULL;
+        BIO_free(outbuf);
+        return NULL;
     }
 
     BIO_get_mem_ptr(outbuf, &bufmem);
     result = newSVpv(bufmem->data, bufmem->length);
     BIO_free(outbuf);
 
+    if (this->pubkeys_are_tainted) {
+        SvTAINTED_on(result);
+    }
+
     return result;
 }
 
-static SV* _encrypt(Crypt_SMIME this, char* raw) {
+static SV* _encrypt(Crypt_SMIME this, char* plaintext) {
     BIO* inbuf;
     BIO* outbuf;
     PKCS7* enc;
@@ -245,35 +268,39 @@ static SV* _encrypt(Crypt_SMIME this, char* raw) {
     BUF_MEM* bufmem;
     SV* result;
 
-    inbuf = BIO_new_mem_buf(raw, -1);
+    inbuf = BIO_new_mem_buf(plaintext, -1);
     if (inbuf == NULL) {
-	return NULL;
+        return NULL;
     }
 
     enc = PKCS7_encrypt(this->pubkeys_stack, inbuf, this->cipher, flags);
     BIO_free(inbuf);
-    
+
     if (enc == NULL) {
-	return NULL;
+        return NULL;
     }
 
     outbuf = BIO_new(BIO_s_mem());
     if (outbuf == NULL) {
-	PKCS7_free(enc);
-	return NULL;
+        PKCS7_free(enc);
+        return NULL;
     }
 
     err = SMIME_write_PKCS7(outbuf, enc, NULL, flags);
     PKCS7_free(enc);
 
     if (err != 1) {
-	BIO_free(outbuf);
-	return NULL;
+        BIO_free(outbuf);
+        return NULL;
     }
 
     BIO_get_mem_ptr(outbuf, &bufmem);
     result = newSVpv(bufmem->data, bufmem->length);
     BIO_free(outbuf);
+
+    if (this->pubkeys_are_tainted) {
+        SvTAINTED_on(result);
+    }
 
     return result;
 }
@@ -289,33 +316,37 @@ static SV* _decrypt(Crypt_SMIME this, char* encrypted_mime) {
 
     inbuf = BIO_new_mem_buf(encrypted_mime, -1);
     if (inbuf == NULL) {
-	return NULL;
+        return NULL;
     }
 
     enc = SMIME_read_PKCS7(inbuf, NULL);
     BIO_free(inbuf);
 
     if (enc == NULL) {
-	return NULL;
+        return NULL;
     }
 
     outbuf = BIO_new(BIO_s_mem());
     if (outbuf == NULL) {
-	PKCS7_free(enc);
-	return NULL;
+        PKCS7_free(enc);
+        return NULL;
     }
 
     err = PKCS7_decrypt(enc, this->priv_key, this->priv_cert, outbuf, flags);
     PKCS7_free(enc);
 
     if (err != 1) {
-	BIO_free(outbuf);
-	return NULL;
+        BIO_free(outbuf);
+        return NULL;
     }
 
     BIO_get_mem_ptr(outbuf, &bufmem);
     result = newSVpv(bufmem->data, bufmem->length);
     BIO_free(outbuf);
+
+    if (this->priv_key_is_tainted || this->priv_cert_is_tainted) {
+        SvTAINTED_on(result);
+    }
 
     return result;
 }
@@ -324,8 +355,8 @@ static void seed_rng() {
     RAND_poll();
 
     while (RAND_status() == 0) {
-	long seed = random();
-	RAND_seed(&seed, sizeof(long));
+        long seed = random();
+        RAND_seed(&seed, sizeof(long));
     }
 }
 
@@ -337,16 +368,16 @@ _init(char* /*CLASS*/)
     CODE:
         /* libcryptoの初期化 */
         ERR_load_crypto_strings();
-        SSLeay_add_all_algorithms();
+        OpenSSL_add_all_algorithms();
         seed_rng();
 
 Crypt_SMIME
 new(char* /*CLASS*/)
     CODE:
         RETVAL = safemalloc(sizeof(struct crypt_smime));
-	if (RETVAL == NULL) {
-	    croak("Crypt::SMIME#new: unable to allocate Crypt_SMIME");
-	}
+        if (RETVAL == NULL) {
+            croak("Crypt::SMIME#new: unable to allocate Crypt_SMIME");
+        }
 
         memset(RETVAL, '\0', sizeof(struct crypt_smime));
 
@@ -359,12 +390,12 @@ DESTROY(Crypt_SMIME this)
         if (this->priv_cert) {
             X509_free(this->priv_cert);
         }
-	if (this->priv_key) {
+        if (this->priv_key) {
             EVP_PKEY_free(this->priv_key);
         }
-	if (this->pubkeys_stack) {
-	    sk_X509_free(this->pubkeys_stack);
-	}
+        if (this->pubkeys_stack) {
+            sk_X509_free(this->pubkeys_stack);
+        }
         if (this->pubkeys_store) {
             X509_STORE_free(this->pubkeys_store);
         }
@@ -385,25 +416,28 @@ setPrivateKey(Crypt_SMIME this, char* pem, char* crt, ...)
         /* 古い鍵があったら消す */
         if (this->priv_cert) {
             X509_free(this->priv_cert);
-	    this->priv_cert = NULL;
+            this->priv_cert = NULL;
         }
-	if (this->priv_key) {
+        if (this->priv_key) {
             EVP_PKEY_free(this->priv_key);
-	    this->priv_key = NULL;
+            this->priv_key = NULL;
         }
 
-	this->priv_key = load_privkey(this, pem, password);
- 	if (this->priv_key == NULL) {
-	    OPENSSL_CROAK("Crypt::SMIME#setPrivateKey: failed to load the private key");
+        this->priv_key = load_privkey(this, pem, password);
+        if (this->priv_key == NULL) {
+            OPENSSL_CROAK("Crypt::SMIME#setPrivateKey: failed to load the private key");
         }
 
-	this->priv_cert = load_cert(crt);
-	if (this->priv_cert == NULL) {
-	    OPENSSL_CROAK("Crypt::SMIME#setPrivateKey: failed to load the private cert");
-	}
+        this->priv_cert = load_cert(crt);
+        if (this->priv_cert == NULL) {
+            OPENSSL_CROAK("Crypt::SMIME#setPrivateKey: failed to load the private cert");
+        }
 
-	SvREFCNT_inc(ST(0));
-	RETVAL = ST(0);
+        this->priv_key_is_tainted  = SvTAINTED(ST(1));
+        this->priv_cert_is_tainted = SvTAINTED(ST(2));
+
+        SvREFCNT_inc(ST(0));
+        RETVAL = ST(0);
 
     OUTPUT:
         RETVAL
@@ -412,82 +446,82 @@ SV*
 setPublicKey(Crypt_SMIME this, SV* crt)
     CODE:
         /*
-	    crt: ARRAY Refなら、その各要素が公開鍵
+            crt: ARRAY Refなら、その各要素が公開鍵
                  SCALARなら、それが公開鍵
         */
 
         /* 古い鍵があったら消す */
-	if (this->pubkeys_stack) {
-	    sk_X509_free(this->pubkeys_stack);
-	    this->pubkeys_stack = NULL;
-	}
-	if (this->pubkeys_store) {
-	    X509_STORE_free(this->pubkeys_store);
-	    this->pubkeys_store = NULL;
-	}
+        if (this->pubkeys_stack) {
+            sk_X509_free(this->pubkeys_stack);
+            this->pubkeys_stack = NULL;
+        }
+        if (this->pubkeys_store) {
+            X509_STORE_free(this->pubkeys_store);
+            this->pubkeys_store = NULL;
+        }
 
         this->pubkeys_store = X509_STORE_new();
-	if (this->pubkeys_store == NULL) {
-	    croak("Crypt::SMIME#new: failed to allocate X509_STORE");
-	}
+        if (this->pubkeys_store == NULL) {
+            croak("Crypt::SMIME#new: failed to allocate X509_STORE");
+        }
 
-	/* 何故STACK_OF(X509)とX509_STOREの二つを使う必要があるのか。 */
-	this->pubkeys_stack = sk_X509_new_null();
-	if (this->pubkeys_stack == NULL) {
-	    croak("Crypt::SMIME#setPublicKey: failed to allocate STACK_OF(X509)");
-	}
+        /* 何故STACK_OF(X509)とX509_STOREの二つを使う必要があるのか。 */
+        this->pubkeys_stack = sk_X509_new_null();
+        if (this->pubkeys_stack == NULL) {
+            croak("Crypt::SMIME#setPublicKey: failed to allocate STACK_OF(X509)");
+        }
 
-	if (SvROK(crt) && SvTYPE(SvRV(crt)) == SVt_PVAV) {
-	    AV* array = (AV*)SvRV(crt);
-	    I32 i, len = av_len(array);
+        if (SvROK(crt) && SvTYPE(SvRV(crt)) == SVt_PVAV) {
+            AV* array = (AV*)SvRV(crt);
+            I32 i, len = av_len(array);
 
-	    for (i = 0; i <= len; i++) {
-	        SV** val = av_fetch(array, i, 1);
-		if (val == NULL) {
-		    continue; /* 多分起こらないが… */
+            for (i = 0; i <= len; i++) {
+                SV** val = av_fetch(array, i, 1);
+                if (val == NULL) {
+                    continue; /* 多分起こらないが… */
                 }
 
-		if (SvPOK(*val)) {
-		    SV* this_sv = ST(0);
+                if (is_string(*val)) {
+                    SV* this_sv = ST(0);
 
-		    dSP;
-		    ENTER;
-		    
-		    PUSHMARK(SP);
-		    XPUSHs(this_sv);
-		    XPUSHs(*val);
-		    PUTBACK;
+                    dSP;
+                    ENTER;
 
-		    call_method("_addPublicKey", G_DISCARD);
+                    PUSHMARK(SP);
+                    XPUSHs(this_sv);
+                    XPUSHs(*val);
+                    PUTBACK;
 
-		    LEAVE;
-		}
-		else {
-		    croak("Crypt::SMIME#setPublicKey: ARG[1] is an array but it contains some non-string values");
-		}
-	    }
-	}
-	else if (SvPOK(crt)) {
-	    SV* this_sv = ST(0);
+                    call_method("_addPublicKey", G_DISCARD);
 
-	    dSP;
-	    ENTER;
+                    LEAVE;
+                }
+                else {
+                    croak("Crypt::SMIME#setPublicKey: ARG[1] is an array but it contains some non-string values");
+                }
+            }
+        }
+        else if (is_string(crt)) {
+            SV* this_sv = ST(0);
 
-	    PUSHMARK(SP);
-	    XPUSHs(this_sv);
-	    XPUSHs(crt);
-	    PUTBACK;
+            dSP;
+            ENTER;
 
-	    call_method("_addPublicKey", G_DISCARD);
+            PUSHMARK(SP);
+            XPUSHs(this_sv);
+            XPUSHs(crt);
+            PUTBACK;
 
-	    LEAVE;
-	}
-	else {
-	    croak("Crypt::SMIME#setPublicKey: ARG[1] is not a string nor an ARRAY Ref");
-	}
+            call_method("_addPublicKey", G_DISCARD);
 
-	SvREFCNT_inc(ST(0));
-	RETVAL = ST(0);
+            LEAVE;
+        }
+        else {
+            croak("Crypt::SMIME#setPublicKey: ARG[1] is not a string nor an ARRAY Ref");
+        }
+
+        SvREFCNT_inc(ST(0));
+        RETVAL = ST(0);
 
     OUTPUT:
         RETVAL
@@ -539,61 +573,63 @@ _addPublicKey(Crypt_SMIME this, char* crt)
         }
         BIO_free(buf);
 
+        this->pubkeys_are_tainted  = SvTAINTED(ST(1));
+
 SV*
-_sign(Crypt_SMIME this, char* raw)
+_sign(Crypt_SMIME this, char* plaintext)
     CODE:
         /* 秘密鍵がまだセットされていなければエラー */
         if (this->priv_key == NULL) {
-	    croak("Crypt::SMIME#sign: private key has not yet been set. Set one before signing");
+            croak("Crypt::SMIME#sign: private key has not yet been set. Set one before signing");
         }
         if (this->priv_cert == NULL) {
-	    croak("Crypt::SMIME#sign: private cert has not yet been set. Set one before signing");
+            croak("Crypt::SMIME#sign: private cert has not yet been set. Set one before signing");
         }
 
-        RETVAL = sign(this, raw);
+        RETVAL = sign(this, plaintext);
         if (RETVAL == NULL) {
-	    OPENSSL_CROAK("Crypt::SMIME#sign: failed to sign the message");
+            OPENSSL_CROAK("Crypt::SMIME#sign: failed to sign the message");
         }
-	
+
     OUTPUT:
         RETVAL
 
 SV*
-_signonly(Crypt_SMIME this, char* raw)
+_signonly(Crypt_SMIME this, char* plaintext)
     CODE:
         /* 秘密鍵がまだセットされていなければエラー */
         if (this->priv_key == NULL) {
-	    croak("Crypt::SMIME#signonly: private key has not yet been set. Set one before signing");
+            croak("Crypt::SMIME#signonly: private key has not yet been set. Set one before signing");
         }
         if (this->priv_cert == NULL) {
-	    croak("Crypt::SMIME#signonly: private cert has not yet been set. Set one before signing");
+            croak("Crypt::SMIME#signonly: private cert has not yet been set. Set one before signing");
         }
 
-        RETVAL = signonly(this, raw);
+        RETVAL = signonly(this, plaintext);
         if (RETVAL == NULL) {
-	    OPENSSL_CROAK("Crypt::SMIME#signonly: failed to sign the message");
+            OPENSSL_CROAK("Crypt::SMIME#signonly: failed to sign the message");
         }
-	
+
     OUTPUT:
         RETVAL
 
 SV*
-_encrypt(Crypt_SMIME this, char* raw)
+_encrypt(Crypt_SMIME this, char* plaintext)
     CODE:
         /* 公開鍵がまだセットされていなければエラー */
-	if (this->pubkeys_stack == NULL) {
-	    croak("Crypt::SMIME#encrypt: public cert has not yet been set. Set one before encrypting");
-	}
+        if (this->pubkeys_stack == NULL) {
+            croak("Crypt::SMIME#encrypt: public cert has not yet been set. Set one before encrypting");
+        }
 
-	/* cipherがまだ無ければ設定 */
-	if (this->cipher == NULL) {
-	    this->cipher = EVP_des_ede3_cbc();
-	}
+        /* cipherがまだ無ければ設定 */
+        if (this->cipher == NULL) {
+            this->cipher = EVP_des_ede3_cbc();
+        }
 
-	RETVAL = _encrypt(this, raw);
-	if (RETVAL == NULL) {
-	    OPENSSL_CROAK("Crypt::SMIME#encrypt: failed to encrypt the message");
-	}
+        RETVAL = _encrypt(this, plaintext);
+        if (RETVAL == NULL) {
+            OPENSSL_CROAK("Crypt::SMIME#encrypt: failed to encrypt the message");
+        }
 
     OUTPUT:
         RETVAL
@@ -602,14 +638,14 @@ SV*
 check(Crypt_SMIME this, char* signed_mime)
     CODE:
         /* 公開鍵がまだセットされていなければエラー */
-	if (this->pubkeys_store == NULL) {
-	    croak("Crypt::SMIME#check: public cert has not yet been set. Set one before checking");
-	}
+        if (this->pubkeys_store == NULL) {
+            croak("Crypt::SMIME#check: public cert has not yet been set. Set one before checking");
+        }
 
-	RETVAL = check(this, signed_mime);
-	if (RETVAL == NULL) {
-	    OPENSSL_CROAK("Crypt::SMIME#check: failed to check the signature");
-	}
+        RETVAL = check(this, signed_mime);
+        if (RETVAL == NULL) {
+            OPENSSL_CROAK("Crypt::SMIME#check: failed to check the signature");
+        }
 
     OUTPUT:
         RETVAL
@@ -619,17 +655,17 @@ decrypt(Crypt_SMIME this, char* encrypted_mime)
     CODE:
         /* 秘密鍵がまだセットされていなければエラー */
         if (this->priv_key == NULL) {
-	    croak("Crypt::SMIME#decrypt: private key has not yet been set. Set one before decrypting");
+            croak("Crypt::SMIME#decrypt: private key has not yet been set. Set one before decrypting");
         }
         if (this->priv_cert == NULL) {
-	    croak("Crypt::SMIME#decrypt: private cert has not yet been set. Set one before decrypting");
+            croak("Crypt::SMIME#decrypt: private cert has not yet been set. Set one before decrypting");
         }
 
-	RETVAL = _decrypt(this, encrypted_mime);
+        RETVAL = _decrypt(this, encrypted_mime);
         if (RETVAL == NULL) {
-	    OPENSSL_CROAK("Crypt::SMIME#decrypt: failed to decrypt the message");
+            OPENSSL_CROAK("Crypt::SMIME#decrypt: failed to decrypt the message");
         }
-	
+
     OUTPUT:
         RETVAL
 

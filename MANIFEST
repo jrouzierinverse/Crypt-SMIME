@@ -1,17 +1,26 @@
+.hgtags
 Changes
 lib/SMIME.pm
 lib/SMIME/JA.pod
 Makefile.PL
 MANIFEST			This list of files
 MANIFEST.SKIP
-openssl_config.PL
+MYMETA.json
+MYMETA.yml
 README
 SMIME.mlpod
 SMIME.pl
 SMIME.pod
 SMIME.xs
-t/chained-certs.t
-t/smime.more.t
-t/smime.t
+t/00-load.t
+t/01-smime.t
+t/02-smime.more.t
+t/03-chained-certs.t
+t/04-taint.t
+t/boilerplate.t
+t/dependencies.t
+t/pod-coverage.t
+t/pod.t
 typemap
-META.yml                                 Module meta-data (added by MakeMaker)
+META.yml                                 Module YAML meta-data (added by MakeMaker)
+META.json                                Module JSON meta-data (added by MakeMaker)
