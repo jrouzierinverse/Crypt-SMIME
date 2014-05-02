@@ -4,7 +4,7 @@
 =head1 NAME
 
 Crypt::SMIME - S/MIME message signing, verification, encryption and decryption
-J<< ja; Crypt::SMIME::JA - S/MIMEの署名、検証、暗号化、復号化 >>
+J<< ja; Crypt::SMIME::JA - S/MIMEの署名、検証、暗号化、復号 >>
 
 =head1 SYNOPSIS
 
@@ -30,7 +30,7 @@ J<< ja; Crypt::SMIME::JA - S/MIMEの署名、検証、暗号化、復号化 >>
 This module provides a class for handling S/MIME messages. It can sign, verify,
 encrypt and decrypt messages. It requires libcrypto (L<http://www.openssl.org>).
 J<< ja;
-S/MIMEの署名、検証、暗号化、復号化を行うクラス。
+S/MIMEの署名、検証、暗号化、復号を行うクラス。
 libcrypto (L<http://www.openssl.org>) が必要。
 >>
 
@@ -56,7 +56,7 @@ Store a private key and its X.509 certificate into the instance. The private key
 will be used for signing and decryption. Note that this method takes a PEM
 string, not a name of a file which contains a key or a certificate.
 J<< ja;
-秘密鍵を設定する。ここで設定された秘密鍵は署名と復号化の際に用いられる。
+秘密鍵を設定する。ここで設定された秘密鍵は署名と復号の際に用いられる。
 ファイル名ではなく、鍵本体を渡す。
 >>
 

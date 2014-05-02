@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-Crypt::SMIME::JA - S/MIMEの署名、検証、暗号化、復号化
+Crypt::SMIME::JA - S/MIMEの署名、検証、暗号化、復号
 
 =head1 概要
 
@@ -25,7 +25,7 @@ Crypt::SMIME::JA - S/MIMEの署名、検証、暗号化、復号化
 
 =head1 説明
 
-S/MIMEの署名、検証、暗号化、復号化を行うクラス。
+S/MIMEの署名、検証、暗号化、復号を行うクラス。
 libcrypto (L<http://www.openssl.org>) が必要。
 
 =head2 メソッド
@@ -43,7 +43,7 @@ libcrypto (L<http://www.openssl.org>) が必要。
   $smime->setPrivateKey($key, $crt);
   $smime->setPrivateKey($key, $crt, $password);
 
-秘密鍵を設定する。ここで設定された秘密鍵は署名と復号化の際に用いられる。
+秘密鍵を設定する。ここで設定された秘密鍵は署名と復号の際に用いられる。
 ファイル名ではなく、鍵本体を渡す。
 
 対応しているフォーマットは PEM のみ。鍵の読み込みに失敗した場合はdieする。

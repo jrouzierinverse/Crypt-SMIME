@@ -3,7 +3,7 @@
 use Test::More tests => 1;
 
 BEGIN {
-    use_ok( 'RPC::Ridill::Client' );
+    use_ok( 'Crypt::SMIME' );
 }
 
-diag( "Testing RPC::Ridill::Client $RPC::Ridill::Client::VERSION, Perl $], $^X" );
+diag( "Testing Crypt::SMIME $Crypt::SMIME::VERSION, Perl $], $^X" );

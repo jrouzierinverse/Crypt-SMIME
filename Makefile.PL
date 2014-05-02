@@ -1,21 +1,6 @@
 use strict;
 use warnings;
 use ExtUtils::MakeMaker;
-use ExtUtils::PkgConfig ();
-
-my $LIBCRYPTO_CFLAGS;
-my $LIBCRYPTO_LIBS;
-do {
-    local $| = 1;
-
-    print 'checking for LIBCRYPTO_CFLAGS... ';
-    $LIBCRYPTO_CFLAGS = ExtUtils::PkgConfig->cflags('libcrypto');
-    print "$LIBCRYPTO_CFLAGS\n";
-
-    print 'checking for LIBCRYPTO_LIBS... ';
-    $LIBCRYPTO_LIBS = ExtUtils::PkgConfig->libs('libcrypto');
-    print "$LIBCRYPTO_LIBS\n";
-};
 
 WriteMakefile(
     NAME                => 'Crypt::SMIME',
@@ -23,16 +8,36 @@ WriteMakefile(
     VERSION_FROM        => 'SMIME.pl',
     ABSTRACT            => 'S/MIME message signing, verification, encryption and decryption',
     PL_FILES            => {},
-    PREREQ_PM => {
+    CONFIGURE_REQUIRES  => {
+        'ExtUtils::MakeMaker' => 0,
+        'ExtUtils::PkgConfig' => 0,
+    },
+    PREREQ_PM           => {
         'XSLoader'      => 0,
     },
-    BUILD_REQUIRES => {
+    BUILD_REQUIRES      => {
         'ExtUtils::PkgConfig' => 0,
         'Test::Exception'     => 0,
         'Test::More'          => 0,
     },
-    INC                 => "$LIBCRYPTO_CFLAGS -DOPENSSL_LOAD_CONF",
-    LIBS                => $LIBCRYPTO_LIBS,
+    CONFIGURE           => sub {
+        require ExtUtils::PkgConfig;
+
+        local $| = 1;
+
+        print 'checking for LIBCRYPTO_CFLAGS... ';
+        my $LIBCRYPTO_CFLAGS = ExtUtils::PkgConfig->cflags('libcrypto');
+        print "$LIBCRYPTO_CFLAGS\n";
+
+        print 'checking for LIBCRYPTO_LIBS... ';
+        my $LIBCRYPTO_LIBS = ExtUtils::PkgConfig->libs('libcrypto');
+        print "$LIBCRYPTO_LIBS\n";
+
+        return +{
+            INC  => "$LIBCRYPTO_CFLAGS -DOPENSSL_LOAD_CONF",
+            LIBS => $LIBCRYPTO_LIBS,
+        };
+    },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => {
         FILES => 'Crypt-SMIME-*',

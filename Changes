@@ -1,5 +1,8 @@
 Revision history for Crypt::SMIME
 
+0.12    Fri May  2 14:41:17 JST 2014
+        - Fix broken t/00-load.t that was introduced in 0.11.
+
 0.11    Wed Apr 30 19:09:28 JST 2014
         - setPublicKey() was erroneously raising an error if taint
           checking was enabled:
