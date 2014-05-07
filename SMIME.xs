@@ -1,10 +1,16 @@
+#include <assert.h>
 #include <string.h>
-#include <stdlib.h>
+#if defined(HAVE_SYS_TIME_H)
+#  include <sys/time.h>
+#endif
 #include <openssl/crypto.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #include <openssl/pkcs12.h>
 #include <openssl/x509.h>
+#if defined(HAVE_TIME_H)
+#  include <time.h>
+#endif
 
 #include "EXTERN.h"
 #include "perl.h"
@@ -352,11 +358,28 @@ static SV* _decrypt(Crypt_SMIME this, char* encrypted_mime) {
 }
 
 static void seed_rng() {
+    /* OpenSSL automatically seeds the random number generator from
+     * /dev/urandom (on UNIX) or CryptGenRandom (on Windows). But if
+     * we are on an exotic platform, we must somehow seed the RNG.
+     */
     RAND_poll();
-
     while (RAND_status() == 0) {
-        long seed = random();
-        RAND_seed(&seed, sizeof(long));
+
+#if defined(HAVE_GETTIMEOFDAY)
+        struct timeval tv;
+
+        gettimeofday(&tv, NULL);
+        RAND_seed(&tv, sizeof(struct timeval));
+
+#elif defined(HAVE_TIME)
+        time_t t;
+
+        t = time(NULL);
+        RAND_seed(&t, sizeof(time_t));
+
+#else
+        croak("Crypt::SMIME#import: don't know how to seed the CSPRNG on this platform");
+#endif
     }
 }
 

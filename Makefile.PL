@@ -9,6 +9,7 @@ WriteMakefile(
     ABSTRACT            => 'S/MIME message signing, verification, encryption and decryption',
     PL_FILES            => {},
     CONFIGURE_REQUIRES  => {
+        'ExtUtils::CChecker'  => 0,
         'ExtUtils::MakeMaker' => 0,
         'ExtUtils::PkgConfig' => 0,
     },
@@ -21,20 +22,60 @@ WriteMakefile(
         'Test::More'          => 0,
     },
     CONFIGURE           => sub {
+        require ExtUtils::CChecker;
         require ExtUtils::PkgConfig;
 
-        local $| = 1;
+        local $|  = 1;
+        my    $cc = ExtUtils::CChecker->new();
 
-        print 'checking for LIBCRYPTO_CFLAGS... ';
-        my $LIBCRYPTO_CFLAGS = ExtUtils::PkgConfig->cflags('libcrypto');
-        print "$LIBCRYPTO_CFLAGS\n";
+        print 'checking for gettimeofday... ';
+        my $HAVE_GETTIMEOFDAY = $cc->try_compile_run(<<'EOF');
+#include <sys/time.h>
+int main(int argc, char* argv[]) {
+    struct timeval tv;
+    gettimeofday(&tv, (struct timezone*)0);
+    return 0;
+}
+EOF
+        my $HAVE_SYS_TIME_H = $HAVE_GETTIMEOFDAY;
+        print ($HAVE_GETTIMEOFDAY ? "yes\n" : "no\n");
 
-        print 'checking for LIBCRYPTO_LIBS... ';
-        my $LIBCRYPTO_LIBS = ExtUtils::PkgConfig->libs('libcrypto');
-        print "$LIBCRYPTO_LIBS\n";
+        print 'checking for time... ';
+        my $HAVE_TIME = $cc->try_compile_run(<<'EOF');
+#include <time.h>
+int main(int argc, char* argv[]) {
+    time_t t;
+    t = time((time_t*)0);
+    return 0;
+
+}
+EOF
+        my $HAVE_TIME_H = $HAVE_TIME;
+        print ($HAVE_TIME ? "yes\n" : "no\n");
+
+        my ($LIBCRYPTO_CFLAGS, $LIBCRYPTO_LIBS) = do {
+            if (exists $ENV{LIBCRYPTO_CFLAGS} && exists $ENV{LIBCRYPTO_LIBS}) {
+                ($ENV{LIBCRYPTO_CFLAGS}, $ENV{LIBCRYPTO_LIBS});
+            }
+            else {
+                print 'checking for libcrypto... ';
+                my %LIBCRYPTO = ExtUtils::PkgConfig->find('libcrypto');
+                print "$LIBCRYPTO{modversion}\n";
+
+                ($LIBCRYPTO{cflags}, $LIBCRYPTO{libs});
+            }
+        };
+        print "checking for LIBCRYPTO_CFLAGS... $LIBCRYPTO_CFLAGS\n";
+        print "checking for LIBCRYPTO_LIBS... $LIBCRYPTO_LIBS\n";
 
         return +{
-            INC  => "$LIBCRYPTO_CFLAGS -DOPENSSL_LOAD_CONF",
+            INC  => join(' ',
+                         $LIBCRYPTO_CFLAGS,
+                         '-DOPENSSL_LOAD_CONF',
+                         $HAVE_GETTIMEOFDAY ? ('-DHAVE_GETTIMEOFDAY') : (),
+                         $HAVE_SYS_TIME_H   ? ('-DHAVE_SYS_TIME_H'  ) : (),
+                         $HAVE_TIME         ? ('-DHAVE_TIME'        ) : (),
+                         $HAVE_TIME_H       ? ('-DHAVE_TIME_H'      ) : ()),
             LIBS => $LIBCRYPTO_LIBS,
         };
     },

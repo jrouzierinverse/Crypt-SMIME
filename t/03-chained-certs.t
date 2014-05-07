@@ -4,8 +4,9 @@ use warnings;
 use ExtUtils::PkgConfig ();
 use File::Spec;
 use File::Temp qw(tempfile);
-use Test::More tests => 8;
+use Test::More;
 use Test::Exception;
+use Config;
 
 # Create the following certificate tree:
 #
@@ -27,15 +28,23 @@ use Test::Exception;
 
 my (%key, %csr, %crt);
 do {
-    my $DEVNULL = File::Spec->devnull();
+    my $OPENSSL = do {
+        if (defined(my $prefix = ExtUtils::PkgConfig->variable('openssl', 'prefix'))) {
+            my $OPENSSL = $prefix . '/bin/openssl' . $Config{exe_ext};
+            if (-x $OPENSSL) {
+                diag "Using `$OPENSSL' to generate a keypair";
+                $OPENSSL;
+            }
+            else {
+                plan skip_all => q{Executable `openssl' was not found};
+            }
+        }
+        else {
+            plan skip_all => q{No package `openssl' found};
+        }
+    };
 
-    my $OPENSSL = ExtUtils::PkgConfig->variable('openssl', 'prefix') . '/bin/openssl';
-    if (-x $OPENSSL) {
-        diag "Using `$OPENSSL' to generate keypairs";
-    }
-    else {
-        BAIL_OUT(q{Executable `openssl' was not found});
-    }
+    my $DEVNULL = File::Spec->devnull();
 
     # Create the root CA.
     do {
@@ -185,10 +194,8 @@ This is a test mail. Please ignore...
 $verified =~ s/\r?\n|\r/\r\n/g;
 
 # -----------------------------------------------------------------------------
-
-BEGIN {
-    use_ok('Crypt::SMIME');
-}
+plan tests => 8;
+use_ok('Crypt::SMIME');
 
 my $signed = do {
     my $SMIME;

@@ -2,7 +2,7 @@ package Crypt::SMIME;
 use warnings;
 use strict;
 
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 require XSLoader;
 XSLoader::load(__PACKAGE__, $VERSION);

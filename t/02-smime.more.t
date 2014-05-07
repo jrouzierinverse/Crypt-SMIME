@@ -4,17 +4,26 @@ use warnings;
 use ExtUtils::PkgConfig ();
 use File::Spec;
 use File::Temp qw(tempfile);
-use Test::More tests => 13;
+use Test::More;
+use Config;
 
 my ($key, $crt);
 do {
-    my $OPENSSL = ExtUtils::PkgConfig->variable('openssl', 'prefix') . '/bin/openssl';
-    if (-x $OPENSSL) {
-        diag "Using `$OPENSSL' to generate a keypair";
-    }
-    else {
-        BAIL_OUT(q{Executable `openssl' was not found});
-    }
+    my $OPENSSL = do {
+        if (defined(my $prefix = ExtUtils::PkgConfig->variable('openssl', 'prefix'))) {
+            my $OPENSSL = $prefix . '/bin/openssl' . $Config{exe_ext};
+            if (-x $OPENSSL) {
+                diag "Using `$OPENSSL' to generate a keypair";
+                $OPENSSL;
+            }
+            else {
+                plan skip_all => q{Executable `openssl' was not found};
+            }
+        }
+        else {
+            plan skip_all => q{No package `openssl' found};
+        }
+    };
 
     my ($conf_fh, $conf_file) = tempfile(UNLINK => 1);
     print {$conf_fh} <<'EOF';
@@ -55,9 +64,9 @@ EOF
     };
 };
 
-BEGIN {
-    use_ok('Crypt::SMIME');
-}
+# -----------------------------------------------------------------------------
+plan tests => 13;
+use_ok('Crypt::SMIME');
 
 my $password = '';
 my $src_mime = "Content-Type: text/plain\r\n"

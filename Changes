@@ -1,5 +1,13 @@
 Revision history for Crypt::SMIME
 
+0.13    Wed May  7 16:23:52 JST 2014
+        - Improve compatibility with MS Windows:
+          https://rt.cpan.org/Public/Bug/Display.html?id=95373
+        - Do not include .hgtags in release tarball:
+          https://rt.cpan.org/Public/Bug/Display.html?id=95294
+        - Makefile.PL now aborts if no libcrypto.pc can be found in
+          PKG_CONFIG_PATH.
+
 0.12    Fri May  2 14:41:17 JST 2014
         - Fix broken t/00-load.t that was introduced in 0.11.
 
