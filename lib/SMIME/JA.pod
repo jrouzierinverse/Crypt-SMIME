@@ -7,19 +7,19 @@ Crypt::SMIME::JA - S/MIMEの署名、検証、暗号化、復号
 =head1 概要
 
   use Crypt::SMIME;
-  
+
   my $plain = <<'EOF';
   From: alice@example.org
   To: bob@example.com
   Subject: Crypt::SMIME test
-  
+
   This is a test mail. Please ignore...
   EOF
-  
+
   my $smime = Crypt::SMIME->new();
   $smime->setPrivateKey($privkey, $crt);
   # $smime->setPublicKey([$icacert]); # if need be.
-  
+
   my $signed = $smime->sign($plain);
   print $signed;
 
@@ -89,7 +89,7 @@ C<$prepared_mime> には, L</prepareSmimeMessage> で返される値を渡す。
       = $smime->prepareSmimeMessage($source_mime);
 
 署名用のメッセージを準備する。
-C<$prepared_mime> には著名用に修正されたMIMEメッセージを返す。
+C<$prepared_mime> には署名用に修正されたMIMEメッセージを返す。
 C<$outer_header> は、S/MIMEの外側に付与するヘッダを返す。
 
 C<$prepared_mime> の本文はC<$source_mime>と同じ物となるが、
@@ -150,9 +150,38 @@ C<Subject> はS/MIMEを認識できないメーラのために, multipartの
 
 =back
 
+=head2 関数
+
+=over 4
+
+=item extractCertificates()
+
+  @certs = @{Crypt::SMIME::extractCertificates($data)};
+  @certs = @{Crypt::SMIME::extractCertificates($data, $type)};
+
+S/MIMEメッセージまたはPKCS#7オブジェクトに含まれるX.509証明書
+(や証明書失効リスト) をすべて取得する。
+オプションの$typeパラメータでデータの種類を指定できる。
+C<Crypt::SMIME::FORMAT_SMIME> (初期値) はS/MIMEメッセージ、
+C<Crypt::SMIME::FORMAT_ASN1>はバイナリ形式、
+C<Crypt::SMIME::FORMAT_PEM>はPEM形式。
+
+=item getSigners()
+
+  @certs = @{Crypt::SMIME::getSigners($data)};
+  @certs = @{Crypt::SMIME::getSigners($data, $type)};
+
+S/MIMEメッセージまたはPKCS#7オブジェクトに含まれる、署名者の
+X.509証明書を取得する。オプションの$typeパラメータでデータの種類を指定できる。
+
+この関数が返す公開鍵は検証されていないことに注意。
+公開鍵が有効であることを確かめるにはcheck()を実行すること。
+
+=back
+
 =head1 著者
 
-Copyright 2006-2007 YMIRLINK Inc. All Rights Reserved.
+Copyright 2006-2014 YMIRLINK Inc. All Rights Reserved.
 
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself

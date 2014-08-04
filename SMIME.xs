@@ -726,6 +726,191 @@ x509_issuer_hash(char* cert)
   OUTPUT:
     RETVAL
 
+#define CRYPT_SMIME_FORMAT_ASN1     1
+#define CRYPT_SMIME_FORMAT_PEM      3
+#define CRYPT_SMIME_FORMAT_SMIME    6
+
+int
+FORMAT_ASN1()
+    PROTOTYPE:
+    CODE:
+	RETVAL = CRYPT_SMIME_FORMAT_ASN1;
+    OUTPUT:
+	RETVAL
+
+int
+FORMAT_PEM()
+    PROTOTYPE:
+    CODE:
+	RETVAL = CRYPT_SMIME_FORMAT_PEM;
+    OUTPUT:
+	RETVAL
+
+int
+FORMAT_SMIME()
+    PROTOTYPE:
+    CODE:
+	RETVAL = CRYPT_SMIME_FORMAT_SMIME;
+    OUTPUT:
+	RETVAL
+
+SV*
+extractCertificates(SV* indata, int informat=CRYPT_SMIME_FORMAT_SMIME)
+    PROTOTYPE: $;$
+    INIT:
+	BIO* bio;
+	PKCS7* p7 = NULL;
+	STACK_OF(X509)* certs = NULL;
+	STACK_OF(X509_CRL)* crls = NULL;
+	int i;
+	AV* result;
+	BUF_MEM* bufmem;
+
+	if (!SvOK(indata)) {
+	    XSRETURN_UNDEF;
+	}
+	bio = BIO_new_mem_buf(SvPV_nolen(indata), SvCUR(indata));
+        if (bio == NULL) {
+	    OPENSSL_CROAK(
+	        "Crypt::SMIME#extractCertificates: failed to allocate a buffer"
+	    );
+	}
+	switch (informat) {
+	case CRYPT_SMIME_FORMAT_SMIME:
+	    p7 = SMIME_read_PKCS7(bio, NULL);
+	    break;
+	case CRYPT_SMIME_FORMAT_PEM:
+	    p7 = PEM_read_bio_PKCS7(bio, NULL, NULL, NULL);
+	    break;
+	case CRYPT_SMIME_FORMAT_ASN1:
+	    p7 = d2i_PKCS7_bio(bio, NULL);
+	    break;
+	default:
+	    BIO_free(bio);
+	    croak("Crypt::SMIME#extractCertificates: unknown format %d",
+	        informat);
+	}
+	BIO_free(bio);
+	if (p7 == NULL) {
+	    XSRETURN_UNDEF;
+	}
+
+	switch (OBJ_obj2nid(p7->type)) {
+	case NID_pkcs7_signed:
+	    certs = p7->d.sign->cert;
+	    crls = p7->d.sign->crl;
+	    break;
+	case NID_pkcs7_signedAndEnveloped:
+	    certs = p7->d.signed_and_enveloped->cert;
+	    crls = p7->d.signed_and_enveloped->crl;
+	    break;
+	default:
+	    break;
+	}
+
+	result = (AV*)sv_2mortal((SV*)newAV());
+    CODE:
+	if (certs != NULL && 0 < sk_X509_num(certs)) {
+	    for (i = 0; i < sk_X509_num(certs); i++) {
+	        bio = BIO_new(BIO_s_mem());
+	        if (bio == NULL) {
+	            PKCS7_free(p7);
+	            croak("Crypt::SMIME#extractCertificates: failed to allocate a buffer");
+	        }
+	        PEM_write_bio_X509(bio, sk_X509_value(certs, i));
+	        BIO_get_mem_ptr(bio, &bufmem);
+	        av_push(result, newSVpv(bufmem->data, bufmem->length));
+	        BIO_free(bio);
+	    }
+	}
+	if (crls != NULL && 0 < sk_X509_CRL_num(crls)) {
+	    for (i = 0; i < sk_X509_CRL_num(crls); i++) {
+	        bio = BIO_new(BIO_s_mem());
+	            if (bio == NULL) {
+	            PKCS7_free(p7);
+	            croak("Crypt::SMIME#extractCertificates: failed to allocate a buffer");
+	        }
+	        PEM_write_bio_X509_CRL(bio, sk_X509_CRL_value(crls, i));
+	        BIO_get_mem_ptr(bio, &bufmem);
+	        av_push(result, newSVpv(bufmem->data, bufmem->length));
+	        BIO_free(bio);
+	    }
+	}
+
+	PKCS7_free(p7);
+	RETVAL = newRV((SV*) result);
+    OUTPUT:
+	RETVAL
+
+SV*
+getSigners(SV* indata, int informat=CRYPT_SMIME_FORMAT_SMIME)
+    PROTOTYPE: $;$
+    INIT:
+	BIO* bio;
+	PKCS7* p7 = NULL;
+	STACK_OF(X509)* signers;
+	int i;
+	AV* result;
+	BUF_MEM* bufmem;
+
+	if (!SvOK(indata)) {
+	    XSRETURN_UNDEF;
+	}
+	bio = BIO_new_mem_buf(SvPV_nolen(indata), SvCUR(indata));
+        if (bio == NULL) {
+	    OPENSSL_CROAK(
+	        "Crypt::SMIME#getSigners: failed to allocate a buffer"
+	    );
+	}
+	switch (informat) {
+	case CRYPT_SMIME_FORMAT_SMIME:
+	    p7 = SMIME_read_PKCS7(bio, NULL);
+	    break;
+	case CRYPT_SMIME_FORMAT_PEM:
+	    p7 = PEM_read_bio_PKCS7(bio, NULL, NULL, NULL);
+	    break;
+	case CRYPT_SMIME_FORMAT_ASN1:
+	    p7 = d2i_PKCS7_bio(bio, NULL);
+	    break;
+	default:
+	    BIO_free(bio);
+	    croak("Crypt::SMIME#getSigners: unknown format %d",
+	        informat);
+	}
+	BIO_free(bio);
+	if (p7 == NULL) {
+	    XSRETURN_UNDEF;
+	}
+
+	signers = PKCS7_get0_signers(p7, NULL, 0);
+	if (signers == NULL) {
+	    PKCS7_free(p7);
+	    XSRETURN_UNDEF;
+	}
+
+	result = (AV*)sv_2mortal((SV*)newAV());
+    CODE:
+	if (0 < sk_X509_num(signers)) {
+	    for (i = 0; i < sk_X509_num(signers); i++) {
+	        bio = BIO_new(BIO_s_mem());
+	        if (bio == NULL) {
+		    sk_X509_free(signers);
+	            PKCS7_free(p7);
+	            croak("Crypt::SMIME#getSigners: failed to allocate a buffer");
+	        }
+	        PEM_write_bio_X509(bio, sk_X509_value(signers, i));
+	        BIO_get_mem_ptr(bio, &bufmem);
+	        av_push(result, newSVpv(bufmem->data, bufmem->length));
+	        BIO_free(bio);
+	    }
+	}
+
+	sk_X509_free(signers);
+	PKCS7_free(p7);
+	RETVAL = newRV((SV*) result);
+    OUTPUT:
+	RETVAL
+
 # -----------------------------------------------------------------------------
 # End of File.
 # -----------------------------------------------------------------------------

@@ -8,19 +8,19 @@ Crypt::SMIME - S/MIME message signing, verification, encryption and decryption
 =head1 SYNOPSIS
 
   use Crypt::SMIME;
-  
+
   my $plain = <<'EOF';
   From: alice@example.org
   To: bob@example.com
   Subject: Crypt::SMIME test
-  
+
   This is a test mail. Please ignore...
   EOF
-  
+
   my $smime = Crypt::SMIME->new();
   $smime->setPrivateKey($privkey, $crt);
   # $smime->setPublicKey([$icacert]); # if need be.
-  
+
   my $signed = $smime->sign($plain);
   print $signed;
 
@@ -180,9 +180,40 @@ signature.
 
 =back
 
+=head2 FUNCTIONS
+
+=over 4
+
+=item extractCertificates()
+
+  @certs = @{Crypt::SMIME::extractCertificates($data)};
+  @certs = @{Crypt::SMIME::extractCertificates($data, $type)};
+
+Get all X.509 certificates (and CRLs, if any) included in S/MIME message or
+PKCS#7 object $data.  Optional $type parameter may specify type of data:
+C<Crypt::SMIME::FORMAT_SMIME> (default) for S/MIME message;
+C<Crypt::SMIME::FORMAT_ASN1> for binary format;
+C<Crypt::SMIME::FORMAT_PEM> for PEM format.
+
+
+=item getSigners()
+
+  @certs = @{Crypt::SMIME::getSigners($data)};
+  @certs = @{Crypt::SMIME::getSigners($data, $type)};
+
+Get X.509 certificates of signers included in S/MIME message or PKCS#7 object.
+Optional $type parameter may specify type of data.
+
+
+Note that any public keys returned by this function are not verified.
+check() should be executed to ensure public keys are valid.
+
+
+=back
+
 =head1 AUTHOR
 
-Copyright 2006-2007 YMIRLINK Inc. All Rights Reserved.
+Copyright 2006-2014 YMIRLINK Inc. All Rights Reserved.
 
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself

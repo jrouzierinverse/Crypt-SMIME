@@ -9,22 +9,22 @@ J<< ja; Crypt::SMIME::JA - S/MIMEの署名、検証、暗号化、復号 >>
 =head1 SYNOPSIS
 
   use Crypt::SMIME;
-  
+
   my $plain = <<'EOF';
   From: alice@example.org
   To: bob@example.com
   Subject: Crypt::SMIME test
-  
+
   This is a test mail. Please ignore...
   EOF
-  
+
   my $smime = Crypt::SMIME->new();
   $smime->setPrivateKey($privkey, $crt);
   # $smime->setPublicKey([$icacert]); # if need be.
-  
+
   my $signed = $smime->sign($plain);
   print $signed;
-  
+
 =head1 DESCRIPTION
 
 This module provides a class for handling S/MIME messages. It can sign, verify,
@@ -144,7 +144,7 @@ that is a list of headers to be moved to the top-level of MIME message. You
 would rarely need to call this method directly.
 J<< ja;
 署名用のメッセージを準備する。
-C<$prepared_mime> には著名用に修正されたMIMEメッセージを返す。
+C<$prepared_mime> には署名用に修正されたMIMEメッセージを返す。
 C<$outer_header> は、S/MIMEの外側に付与するヘッダを返す。
 >>
 
@@ -253,9 +253,53 @@ J<< ja;
 
 =back
 
+=head2 FUNCTIONS
+
+=over 4
+
+=item extractCertificates()
+
+  @certs = @{Crypt::SMIME::extractCertificates($data)};
+  @certs = @{Crypt::SMIME::extractCertificates($data, $type)};
+
+Get all X.509 certificates (and CRLs, if any) included in S/MIME message or
+PKCS#7 object $data.  Optional $type parameter may specify type of data:
+C<Crypt::SMIME::FORMAT_SMIME> (default) for S/MIME message;
+C<Crypt::SMIME::FORMAT_ASN1> for binary format;
+C<Crypt::SMIME::FORMAT_PEM> for PEM format.
+J<< ja;
+S/MIMEメッセージまたはPKCS#7オブジェクトに含まれるX.509証明書
+(や証明書失効リスト) をすべて取得する。
+オプションの$typeパラメータでデータの種類を指定できる。
+C<Crypt::SMIME::FORMAT_SMIME> (初期値) はS/MIMEメッセージ、
+C<Crypt::SMIME::FORMAT_ASN1>はバイナリ形式、
+C<Crypt::SMIME::FORMAT_PEM>はPEM形式。
+>>
+
+=item getSigners()
+
+  @certs = @{Crypt::SMIME::getSigners($data)};
+  @certs = @{Crypt::SMIME::getSigners($data, $type)};
+
+Get X.509 certificates of signers included in S/MIME message or PKCS#7 object.
+Optional $type parameter may specify type of data.
+J<< ja;
+S/MIMEメッセージまたはPKCS#7オブジェクトに含まれる、署名者の
+X.509証明書を取得する。オプションの$typeパラメータでデータの種類を指定できる。
+>>
+
+Note that any public keys returned by this function are not verified.
+check() should be executed to ensure public keys are valid.
+J<< ja;
+この関数が返す公開鍵は検証されていないことに注意。
+公開鍵が有効であることを確かめるにはcheck()を実行すること。
+>>
+
+=back
+
 =head1 AUTHOR
 
-Copyright 2006-2007 YMIRLINK Inc. All Rights Reserved.
+Copyright 2006-2014 YMIRLINK Inc. All Rights Reserved.
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself
 
