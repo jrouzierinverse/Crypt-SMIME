@@ -1,5 +1,12 @@
 Revision history for Crypt::SMIME
 
+0.15    Wed Aug 13 16:53:50 JST 2014
+        - New function: setPublicKeyStore(), Patch by hatuka [...]
+          nezumi.nu:
+          https://rt.cpan.org/Public/Bug/Display.html?id=97955
+        - Fix a memory leak in setPublicKey().
+        - Add missing test cases for taintedness.
+
 0.14    Mon Aug  4 14:21:21 JST 2014
         - New function: extractCertificates() and getSigners(), Patch
           by hatuka [...]  nezumi.nu:

@@ -58,6 +58,16 @@ libcrypto (L<http://www.openssl.org>) が必要。
 
 対応しているフォーマットは PEM のみ。鍵の読み込みに失敗した場合はdieする。
 
+=item setPublicKeyStore()
+
+  $smime->setPublicKeyStore($path, ...);
+
+信頼している証明書 (複数可)
+が入ったファイルやディレクトリのパス (複数可)
+を設定する。ここで設定された証明書ストアは、署名の検証の際に用いられる。
+
+証明書ストアの読み込みに失敗した場合はdieする。
+
 =item sign()
 
   $signed_mime = $smime->sign($raw_mime);

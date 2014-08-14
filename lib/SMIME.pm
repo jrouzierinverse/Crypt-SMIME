@@ -4,7 +4,7 @@ package Crypt::SMIME;
 use warnings;
 use strict;
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 require XSLoader;
 XSLoader::load(__PACKAGE__, $VERSION);
@@ -245,6 +245,17 @@ used for signing, verification and encryption.
 
 The certificates must be encoded in PEM format. The method dies if it fails to
 load the certificates.
+
+
+=item setPublicKeyStore()
+
+  $smime->setPublicKeyStore($path, ...);
+
+Set the paths of file or directory containing trusted certificates.
+The certificate stores will be used for verification.
+
+
+The method dies if it fails to load the certificate stores.
 
 
 =item sign()

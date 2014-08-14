@@ -99,7 +99,7 @@ use_ok('Crypt::SMIME');
 taint_checking_ok();
 
 subtest 'Untainted' => sub {
-    plan tests => 14;
+    plan tests => 18;
 
     my $smime = Crypt::SMIME->new();
     untaint $key;
@@ -130,19 +130,27 @@ subtest 'Untainted' => sub {
     my $decrypted;
     lives_ok {$decrypted = $smime->decrypt($encrypted)} 'Decrypt an untainted message';
     untainted_ok $decrypted, 'The decrypted message shall be untainted';
-    is $decrypted, $verify, 'The decrypted message matches to the original'
+    is $decrypted, $verify, 'The decrypted message matches to the original';
+
+    my $certs_ref;
+    lives_ok {$certs_ref = Crypt::SMIME::extractCertificates($signed)} 'Extract certificates from an untainted message';
+    untainted_ok_deeply $certs_ref, 'The extracted certificates shall be untainted';
+
+    lives_ok {$certs_ref = Crypt::SMIME::getSigners($signed)} 'Extract signer certificates from an untainted message';
+    untainted_ok_deeply $certs_ref, 'The extracted certificates shall be untainted';
 };
 
 subtest 'Tainted keypair' => sub {
-    plan tests => 13;
+    plan tests => 18;
 
     my $smime = Crypt::SMIME->new();
     taint $key;
     taint $crt;
-    lives_ok {$smime->setPrivateKey($key, $crt)} 'Set an tainted keypair';
+    lives_ok {$smime->setPrivateKey($key, $crt)} 'Set a tainted keypair';
     untaint $crt;
     lives_ok {$smime->setPublicKey($crt)} 'Set un untainted public key';
     lives_ok {$smime->setPublicKey([$crt])} 'Set un untainted public key';
+    untainted_ok $smime, 'The context itself is not tainted';
 
     my $signed;
     untaint $plain;
@@ -164,7 +172,15 @@ subtest 'Tainted keypair' => sub {
     my $decrypted;
     lives_ok {$decrypted = $smime->decrypt($encrypted)} 'Decrypt an untainted message';
     tainted_ok $decrypted, 'The decrypted message shall be tainted';
-    is $decrypted, $verify, 'The decrypted message matches to the original'
+    is $decrypted, $verify, 'The decrypted message matches to the original';
+
+    my $certs_ref;
+    taint $signed;
+    lives_ok {$certs_ref = Crypt::SMIME::extractCertificates($signed)} 'Extract certificates from a tainted message';
+    tainted_ok_deeply $certs_ref, 'The extracted certificates shall be tainted';
+
+    lives_ok {$certs_ref = Crypt::SMIME::getSigners($signed)} 'Extract signer certificates from an tainted message';
+    tainted_ok_deeply $certs_ref, 'The extracted certificates shall be tainted';
 };
 
 subtest 'Tainted plain text' => sub {
@@ -196,11 +212,11 @@ subtest 'Tainted plain text' => sub {
     my $decrypted;
     lives_ok {$decrypted = $smime->decrypt($encrypted)} 'Decrypt a tainted message';
     tainted_ok $decrypted, 'The decrypted message shall be tainted';
-    is $decrypted, $verify, 'The decrypted message matches to the original'
+    is $decrypted, $verify, 'The decrypted message matches to the original';
 };
 
 subtest 'Tainted public keys' => sub {
-    plan tests => 13;
+    plan tests => 20;
 
     my $smime = Crypt::SMIME->new();
     untaint $key;
@@ -230,5 +246,14 @@ subtest 'Tainted public keys' => sub {
     my $decrypted;
     lives_ok {$decrypted = $smime->decrypt($encrypted)} 'Decrypt a tainted message';
     tainted_ok $decrypted, 'The decrypted message shall be tainted';
-    is $decrypted, $verify, 'The decrypted message matches to the original'
+    is $decrypted, $verify, 'The decrypted message matches to the original';
+
+    lives_ok {$smime->setPublicKeyStore()} 'Load the default public key store';
+    lives_ok {$signed = $smime->sign($plain)} 'Sign an untainted message';
+    tainted_ok $signed, 'The signed message shall be tainted (because we haven\'t removed our tainted key)';
+
+    lives_ok {$smime->setPublicKey([])} 'Clear the public key store';
+    lives_ok {$smime->setPublicKeyStore()} 'Load the default public key store';
+    lives_ok {$signed = $smime->sign($plain)} 'Sign an untainted message';
+    untainted_ok $signed, 'The signed message shall be untainted now';
 };

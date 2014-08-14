@@ -11,6 +11,8 @@
 #if defined(HAVE_TIME_H)
 #  include <time.h>
 #endif
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "EXTERN.h"
 #include "perl.h"
@@ -485,7 +487,7 @@ setPublicKey(Crypt_SMIME this, SV* crt)
 
         this->pubkeys_store = X509_STORE_new();
         if (this->pubkeys_store == NULL) {
-            croak("Crypt::SMIME#new: failed to allocate X509_STORE");
+            croak("Crypt::SMIME#setPublicKey: failed to allocate X509_STORE");
         }
 
         /* 何故STACK_OF(X509)とX509_STOREの二つを使う必要があるのか。 */
@@ -493,6 +495,8 @@ setPublicKey(Crypt_SMIME this, SV* crt)
         if (this->pubkeys_stack == NULL) {
             croak("Crypt::SMIME#setPublicKey: failed to allocate STACK_OF(X509)");
         }
+
+        this->pubkeys_are_tainted = FALSE;
 
         if (SvROK(crt) && SvTYPE(SvRV(crt)) == SVt_PVAV) {
             AV* array = (AV*)SvRV(crt);
@@ -576,16 +580,14 @@ _addPublicKey(Crypt_SMIME this, char* crt)
                 }
             }
 
+            /* X509_STORE_add_cert() has an undocumented behavior that
+             * increments a refcount in X509 unlike sk_X509_push(). So
+             * we must not call X509_dup() here.
+             */
             if (X509_STORE_add_cert(this->pubkeys_store, pub_cert) == 0) {
                 X509_free(pub_cert);
                 BIO_free(buf);
                 OPENSSL_CROAK("Crypt::SMIME#setPublicKey: failed to store the public cert");
-            }
-
-            pub_cert = X509_dup(pub_cert);
-            if (pub_cert == NULL) {
-                BIO_free(buf);
-                OPENSSL_CROAK("Crypt::SMIME#setPublicKey: failed to duplicate the X509 structure");
             }
 
             if (sk_X509_push(this->pubkeys_stack, pub_cert) == 0) {
@@ -596,7 +598,105 @@ _addPublicKey(Crypt_SMIME this, char* crt)
         }
         BIO_free(buf);
 
-        this->pubkeys_are_tainted  = SvTAINTED(ST(1));
+        if (SvTAINTED(ST(1))) {
+            this->pubkeys_are_tainted = TRUE;
+        }
+
+SV*
+setPublicKeyStore(Crypt_SMIME this, ...)
+    INIT:
+        X509_STORE* store;
+        X509* pub_cert;
+        X509_LOOKUP *lookup_file, *lookup_path;
+        int i, has_file = 0, has_path = 0;
+        char* pathname;
+        struct stat bufstat;
+    CODE:
+        /* 古い証明書ストアがあったら消す */
+        if (this->pubkeys_store) {
+            X509_STORE_free(this->pubkeys_store);
+            this->pubkeys_store = NULL;
+        }
+
+        store = X509_STORE_new();
+        if (store == NULL) {
+            croak("Crypt::SMIME#setPublicKeyStore: failed to allocate X509_STORE");
+        }
+
+        /* setPublicKey()で設定した証明書があれば追加する */
+        for (i = 0; i < sk_X509_num(this->pubkeys_stack); i++) {
+            pub_cert = sk_X509_value(this->pubkeys_stack, i);
+            if (pub_cert == NULL || X509_STORE_add_cert(store, pub_cert) == 0) {
+                X509_STORE_free(store);
+                croak("Crypt::SMIME#setPublicKeyStore: failed to store the public cert");
+            }
+        }
+        if (sk_X509_num(this->pubkeys_stack) == 0) {
+            this->pubkeys_are_tainted = FALSE;
+        }
+
+        /* 引数があれば証明書ストアとして追加する */
+        lookup_file = X509_STORE_add_lookup(store, X509_LOOKUP_file());
+        if (lookup_file == NULL) {
+            X509_STORE_free(store);
+            croak("Crypt::SMIME#setPublicKeyStore: failed to allocate X509_LOOKUP");
+        }
+        lookup_path = X509_STORE_add_lookup(store, X509_LOOKUP_hash_dir());
+        if (lookup_path == NULL) {
+            X509_STORE_free(store);
+            croak("Crypt::SMIME#setPublicKeyStore: failed to allocate X509_LOOKUP");
+        }
+        for (i = 1; i < items; i++) {
+            if (ST(i) == NULL) {
+                continue; /* 多分起こらないが… */
+            }
+            if (!is_string(ST(i))) {
+                X509_STORE_free(store);
+                croak("Crypt::SMIME#setPublicKeyStore: ARG[%d] is non-string value", i);
+            }
+
+            pathname = (char *)SvPV_nolen(ST(i));
+            if (stat(pathname, &bufstat) != 0) {
+                X509_STORE_free(store);
+                croak("Crypt::SMIME#setPublicKeyStore: cannot stat %s",
+                    pathname);
+            } else if (bufstat.st_mode & S_IFDIR) {
+                if (!X509_LOOKUP_add_dir(lookup_path, pathname,
+                        X509_FILETYPE_PEM)) {
+                    X509_STORE_free(store);
+                    croak("Crypt::SMIME#setPublicKeyStore: failed to add ARG[%d] as store", i);
+                }
+                has_path = 1;
+            } else {
+                if (!X509_LOOKUP_load_file(lookup_file, pathname,
+                        X509_FILETYPE_PEM)) {
+                    X509_STORE_free(store);
+                    croak("Crypt::SMIME#setPublicKeyStore: failed to add ARG[%d] as store", i);
+                }
+                has_file = 1;
+            }
+
+            if (SvTAINTED(ST(i))) {
+                this->pubkeys_are_tainted = TRUE;
+            }
+        }
+
+        /* 引数がなければ初期値の場所のストアを (存在すれば) 追加する */
+        if (!has_file) {
+            X509_LOOKUP_load_file(lookup_file, NULL, X509_FILETYPE_DEFAULT);
+        }
+        if (!has_path) {
+            X509_LOOKUP_add_dir(lookup_path, NULL, X509_FILETYPE_DEFAULT);
+        }
+
+        ERR_clear_error();
+        this->pubkeys_store = store;
+
+        SvREFCNT_inc(ST(0));
+        RETVAL = ST(0);
+
+    OUTPUT:
+        RETVAL
 
 SV*
 _sign(Crypt_SMIME this, char* plaintext)

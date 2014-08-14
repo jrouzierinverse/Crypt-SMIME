@@ -84,6 +84,23 @@ J<< ja;
 対応しているフォーマットは PEM のみ。鍵の読み込みに失敗した場合はdieする。
 >>
 
+=item setPublicKeyStore()
+
+  $smime->setPublicKeyStore($path, ...);
+
+Set the paths of file or directory containing trusted certificates.
+The certificate stores will be used for verification.
+J<< ja;
+信頼している証明書 (複数可)
+が入ったファイルやディレクトリのパス (複数可)
+を設定する。ここで設定された証明書ストアは、署名の検証の際に用いられる。
+>>
+
+The method dies if it fails to load the certificate stores.
+J<< ja;
+証明書ストアの読み込みに失敗した場合はdieする。
+>>
+
 =item sign()
 
   $signed_mime = $smime->sign($raw_mime);
