@@ -159,16 +159,15 @@ static SV* sign(Crypt_SMIME this, char* plaintext) {
     return result;
 }
 
-static SV* signonly(Crypt_SMIME this, char* plaintext) {
+static SV* signonly(Crypt_SMIME this, char* plaintext, size_t length, int flags) {
     BIO* inbuf;
     BIO* outbuf;
     PKCS7* pkcs7;
-    int flags = PKCS7_DETACHED;
     BUF_MEM* bufmem;
     SV* result;
     int err;
 
-    inbuf = BIO_new_mem_buf(plaintext, -1);
+    inbuf = BIO_new_mem_buf(plaintext, length);
     if (inbuf == NULL) {
         return NULL;
     }
@@ -728,7 +727,26 @@ _signonly(Crypt_SMIME this, char* plaintext)
             croak("Crypt::SMIME#signonly: private cert has not yet been set. Set one before signing");
         }
 
-        RETVAL = signonly(this, plaintext);
+        RETVAL = signonly(this, plaintext, -1, PKCS7_DETACHED);
+        if (RETVAL == NULL) {
+            OPENSSL_CROAK("Crypt::SMIME#signonly: failed to sign the message");
+        }
+
+    OUTPUT:
+        RETVAL
+
+SV*
+_signonly_attached(Crypt_SMIME this, char* plaintext, size_t length(plaintext))
+    CODE:
+        /* 秘密鍵がまだセットされていなければエラー */
+        if (this->priv_key == NULL) {
+            croak("Crypt::SMIME#signonly: private key has not yet been set. Set one before signing");
+        }
+        if (this->priv_cert == NULL) {
+            croak("Crypt::SMIME#signonly: private cert has not yet been set. Set one before signing");
+        }
+
+        RETVAL = signonly(this, plaintext, XSauto_length_of_plaintext, 0);
         if (RETVAL == NULL) {
             OPENSSL_CROAK("Crypt::SMIME#signonly: failed to sign the message");
         }

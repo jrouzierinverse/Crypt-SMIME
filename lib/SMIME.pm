@@ -42,6 +42,22 @@ sub signonly {
 	$result;
 }
 
+sub signonly_attached {
+	my $this = shift;
+	my $mime = shift;
+
+	if(!defined($mime)) {
+		die __PACKAGE__."#signonly: ARG[1] is not defined.\n";
+	} elsif(ref($mime)) {
+		die __PACKAGE__."#signonly: ARG[1] is a Ref. [$mime]\n";
+	}
+
+	# suppose that $mime is prepared.
+	my $result = $this->_signonly_attached($mime);
+	$result =~ s/\r?\n|\r/\r\n/g;
+	$result;
+}
+
 sub encrypt {
 	my $this = shift;
 	my $mime = shift;
@@ -281,6 +297,15 @@ message, the private key or its certificate is tainted.
   $sign = $smime->signonly($prepared_mime);
 
 Generate a signature from a MIME message. The resulting signature is encoded in
+Base64. The MIME message to be passed to this method should be preprocessed
+beforehand by the prepareSmimeMessage() method. You would rarely need to call
+this method directly.
+
+=item signonly_attached()
+
+  $sign = $smime->signonly_attached($prepared_mime);
+
+Generate an attached signature from a MIME message. The resulting signature is encoded in
 Base64. The MIME message to be passed to this method should be preprocessed
 beforehand by the prepareSmimeMessage() method. You would rarely need to call
 this method directly.
